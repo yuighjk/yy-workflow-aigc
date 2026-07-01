@@ -1,0 +1,27 @@
+{
+  "name": "@yy-workflow-aigc/api",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "scripts": {},
+  "dependencies": {
+    "@trpc/client": "catalog:",
+    "@trpc/server": "catalog:",
+    "@yy-workflow-aigc/auth": "workspace:*",
+    "@yy-workflow-aigc/db": "workspace:*",
+    "@yy-workflow-aigc/env": "workspace:*",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@yy-workflow-aigc/config": "workspace:*",
+    "hono": "catalog:",
+    "typescript": "catalog:"
+  }
+}

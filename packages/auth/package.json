@@ -1,0 +1,24 @@
+{
+  "name": "@yy-workflow-aigc/auth",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "scripts": {},
+  "dependencies": {
+    "@yy-workflow-aigc/db": "workspace:*",
+    "@yy-workflow-aigc/env": "workspace:*",
+    "better-auth": "catalog:",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@yy-workflow-aigc/config": "workspace:*",
+    "typescript": "catalog:"
+  }
+}
