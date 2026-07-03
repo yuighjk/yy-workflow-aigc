@@ -1,3 +1,7 @@
+# yy-workflow-aigc
+
+全栈 TypeScript monorepo（Turborepo + pnpm workspaces）：React 前端 + Hono/tRPC 后端 + Prisma/PostgreSQL + better-auth 认证。
+
 # Ultracite Code Standards
 
 This project uses **Ultracite**, a zero-config preset that enforces strict code quality standards through automated formatting and linting.
@@ -124,3 +128,53 @@ Biome's linter will catch most issues automatically. Focus your attention on:
 ---
 
 Most formatting and common issues are automatically fixed by Biome. Run `pnpm dlx ultracite fix` before committing to ensure compliance.
+
+---
+
+## 技术栈
+
+- 语言: TypeScript（ESM）
+- 前端: Vite + React + TanStack Router/Query/Form + Tailwind CSS v4 + tRPC client（`apps/web`）
+- 后端: Hono + tRPC + better-auth（`apps/server`、`packages/api`、`packages/auth`）
+- 数据库: Prisma 7 + PostgreSQL（`packages/db`）
+- 文档站: Astro Starlight（`apps/docs`）
+- 构建/任务: Turborepo；包管理: pnpm@10（catalog）
+- Lint/格式化: Biome（Ultracite preset）
+
+## 常用命令
+
+- 安装依赖: `pnpm install`
+- 开发运行(全部): `pnpm dev` ｜ 仅前端: `pnpm dev:web` ｜ 仅后端: `pnpm dev:server`
+- 构建: `pnpm build`
+- 类型检查: `pnpm check-types`
+- Lint 检查: `pnpm check`（= ultracite check）｜ 自动修复: `pnpm fix`
+- 数据库: `pnpm db:push` / `pnpm db:generate` / `pnpm db:migrate` / `pnpm db:studio`
+- 测试: 暂未配置（见 @rules/testing.md）
+
+## 目录结构
+
+```text
+apps/
+  web/      前端（Vite+React，路由在 src/routes/，组件 src/components/）
+  server/   后端服务（Hono 入口 src/index.ts）
+  docs/     Astro Starlight 文档站
+packages/
+  api/      tRPC router 与 context
+  auth/     better-auth 配置（createAuth）
+  db/       Prisma schema(prisma/schema/) 与 Client
+  ui/       共享 UI 组件（shadcn + base-ui）
+  env/      环境变量校验（@t3-oss/env-core + zod）
+  config/   共享 TS/工具配置
+specs/      开发规格（/yd:prd 生成）
+docs/       需求文档
+```
+
+## 规则
+
+@rules/coding-style.md
+@rules/testing.md
+@rules/security.md
+@rules/git-workflow.md
+@rules/frontend.md
+@rules/backend-api.md
+@rules/database.md

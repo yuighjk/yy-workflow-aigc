@@ -1,0 +1,15 @@
+{
+  "name": "e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "playwright test --config=playwright.config.ts",
+    "test:login": "playwright test --config=playwright.config.ts tests/login.spec.ts",
+    "test:register": "playwright test --config=playwright.config.ts tests/register.spec.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@types/node": "^22.0.0"
+  }
+}
