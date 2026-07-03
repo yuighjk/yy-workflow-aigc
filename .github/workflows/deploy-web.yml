@@ -1,0 +1,118 @@
+# ============================================================
+# Deploy web (apps/web) → Amazon S3
+# ------------------------------------------------------------
+# 只部署前端:vite build 产出 apps/web/dist,再 `aws s3 sync` 到 S3(不带 CloudFront)。
+#
+# 需要在仓库里配置(Settings → Secrets and variables → Actions):
+#
+#   Secrets(密钥,加密):
+#     AWS_ACCESS_KEY_ID       —— 你给的 IAM 用户 access key id
+#     AWS_SECRET_ACCESS_KEY   —— 对应 secret access key
+#
+#   Variables(变量,明文即可):
+#     AWS_REGION              —— S3 桶所在区域,如 ap-east-1 / us-east-1
+#     S3_BUCKET               —— 目标桶名(只写名字,不要带 s3:// 前缀)
+#     VITE_SERVER_URL         —— 后端 API 基址,会被打进前端包(tRPC + better-auth 用),
+#                                如 https://api.example.com(必须是合法 URL,否则构建报错)
+#
+# IAM 至少需要的权限(对该桶):
+#     s3:ListBucket、s3:GetObject、s3:PutObject、s3:DeleteObject
+#
+# 想改用 GitHub OIDC 免密钥:见下方 "configure-aws-credentials" 步骤里的注释。
+# ============================================================
+
+name: Deploy Web to S3
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "apps/web/**"
+      - "packages/**"
+      - "pnpm-lock.yaml"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - ".github/workflows/deploy-web.yml"
+  workflow_dispatch: {} # 支持在 Actions 页面手动触发
+
+# 同一分支上新推送会取消正在跑的旧部署,避免并发覆盖
+concurrency:
+  group: deploy-web-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  # 若改用 OIDC 免密钥方式,取消下面这行注释(configure-aws-credentials 需要它签发 token):
+  # id-token: write
+
+jobs:
+  deploy:
+    name: Build & sync to S3
+    runs-on: ubuntu-latest
+    env:
+      TURBO_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        # 读取 package.json 里的 "packageManager": "pnpm@10.33.2",无需手动指定版本
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        # 前端构建不需要真实的 DB/后端密钥;这里给占位值 + 跳过服务端 env 校验,
+        # 只为让 packages/db 的 postinstall(prisma generate)顺利跑完。
+        env:
+          SKIP_ENV_VALIDATION: "1"
+          DATABASE_URL: "postgresql://user:pass@localhost:5432/placeholder"
+        run: pnpm install --frozen-lockfile
+
+      - name: Build web
+        # 注意:这里不跳过 env 校验,故意让 VITE_SERVER_URL 缺失时构建失败(避免把 undefined 打进包)。
+        env:
+          VITE_SERVER_URL: ${{ vars.VITE_SERVER_URL }}
+        run: pnpm exec turbo run build --filter=web
+
+      - name: Verify build output
+        run: |
+          if [ ! -f apps/web/dist/index.html ]; then
+            echo "::error::apps/web/dist/index.html 不存在,构建可能失败" && exit 1
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ vars.AWS_REGION }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # —— OIDC 免密钥方案(推荐):删掉上面两行 access-key,改用下面这行,
+          #    并在顶部 permissions 里打开 id-token: write ——
+          # role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
+      - name: Sync to S3
+        env:
+          S3_BUCKET: ${{ vars.S3_BUCKET }}
+        run: |
+          set -euo pipefail
+          # 1) 带哈希的静态资源:强缓存 1 年、immutable;--delete 清理桶里已删除的旧文件。
+          #    先排除 html(html 不能强缓存,否则用户拿不到新版本)。
+          aws s3 sync apps/web/dist "s3://${S3_BUCKET}" \
+            --delete \
+            --exclude "*.html" \
+            --cache-control "public,max-age=31536000,immutable"
+          # 2) 再单独传 html:不缓存,保证每次都是最新入口。
+          aws s3 sync apps/web/dist "s3://${S3_BUCKET}" \
+            --exclude "*" \
+            --include "*.html" \
+            --cache-control "no-cache,no-store,must-revalidate" \
+            --content-type "text/html"
+
+      - name: Done
+        run: echo "✅ 已部署 apps/web/dist → s3://${{ vars.S3_BUCKET }} (region ${{ vars.AWS_REGION }})"
