@@ -78,18 +78,18 @@ jobs:
             echo "::error::apps/web/dist/index.html 不存在，构建可能失败" && exit 1
           fi
 
-      - name: Ensure Pages project exists
-        # 首次部署前若项目不存在，wrangler pages deploy 会报错；这里幂等创建(已存在则忽略失败)。
-        continue-on-error: true
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages project create yy-workflow-aigc --production-branch=master
-
       - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy apps/web/dist --project-name=yy-workflow-aigc --branch=master
+        # 直接用 pnpm dlx 运行 wrangler(即时下载，像 npx)，用环境变量认证。
+        # 不用 cloudflare/wrangler-action：它在 pnpm monorepo 里会尝试用 pnpm 跑未安装的
+        # wrangler 而失败(pnpm exec wrangler 找不到 → exit 1)。
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          # 幂等创建 Pages 项目：已存在则忽略失败。
+          pnpm dlx wrangler@latest pages project create yy-workflow-aigc \
+            --production-branch=master || true
+          # 部署构建产物到 Pages。
+          pnpm dlx wrangler@latest pages deploy apps/web/dist \
+            --project-name=yy-workflow-aigc --branch=master
