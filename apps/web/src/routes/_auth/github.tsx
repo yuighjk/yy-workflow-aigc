@@ -7,7 +7,7 @@ import { useState } from "react";
 
 import { trpc } from "@/utils/trpc";
 
-export const Route = createFileRoute("/github")({
+export const Route = createFileRoute("/_auth/github")({
 	component: GithubPage,
 });
 

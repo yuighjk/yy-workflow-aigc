@@ -51,7 +51,7 @@ export function LoginForm() {
 					return;
 				}
 
-				await navigate({ to: "/dashboard" });
+				await navigate({ to: "/github" });
 			} catch {
 				setAuthError(AUTH_UNAVAILABLE_MESSAGE);
 			}
@@ -136,7 +136,7 @@ export function LoginForm() {
 									name={field.name}
 									onBlur={field.handleBlur}
 									onChange={(e) => field.handleChange(e.target.value)}
-									placeholder="至少 6 位"
+									placeholder="至少 8 位"
 									type="password"
 									value={field.state.value}
 								/>

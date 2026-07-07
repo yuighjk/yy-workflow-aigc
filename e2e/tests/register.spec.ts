@@ -6,7 +6,6 @@ const SCREENSHOTS_DIR = path.join(import.meta.dirname, "../../screenshots");
 // URL 断言用的顶层正则常量（biome useTopLevelRegex）。
 const REGISTER_URL = /\/register/;
 const LOGIN_URL = /\/login/;
-const DASHBOARD_URL = /\/dashboard/;
 
 test.describe("Register Page — Feature 2 AC Verification", () => {
 	test.beforeEach(async ({ page }) => {
@@ -130,9 +129,9 @@ test.describe("Register Page — Feature 2 AC Verification", () => {
 		).toBeDisabled();
 	});
 
-	// AC-008: Successful registration creates the user (via better-auth) and navigates to /dashboard.
-	// 拦截注册 + 会话查询，验证成功后自动登录并跳转（前端契约，不依赖真实 Aurora）。
-	test("AC-008 — successful registration navigates to /dashboard", async ({
+	// AC-008: Successful registration creates the user (via better-auth) and navigates to /login.
+	// 拦截注册请求，验证成功后跳转登录页（前端契约，不依赖真实 Aurora）。
+	test("AC-008 — successful registration navigates to /login", async ({
 		page,
 	}) => {
 		await page.route("**/sign-up/email", (route) =>
@@ -141,21 +140,6 @@ test.describe("Register Page — Feature 2 AC Verification", () => {
 				contentType: "application/json",
 				body: JSON.stringify({
 					token: "test-token",
-					user: { id: "u1", email: "test@example.com", name: "testuser" },
-				}),
-			})
-		);
-		// /dashboard 的路由守卫会调用 get-session，返回一个有效会话让其通过。
-		await page.route("**/get-session", (route) =>
-			route.fulfill({
-				status: 200,
-				contentType: "application/json",
-				body: JSON.stringify({
-					session: {
-						id: "s1",
-						userId: "u1",
-						expiresAt: "2999-01-01T00:00:00.000Z",
-					},
 					user: { id: "u1", email: "test@example.com", name: "testuser" },
 				}),
 			})
@@ -169,11 +153,8 @@ test.describe("Register Page — Feature 2 AC Verification", () => {
 		await page.locator('input[name="confirmPassword"]').fill("12345678");
 		await page.getByRole("button", { name: "注册" }).click();
 
-		await page.waitForURL(DASHBOARD_URL);
-		await expect(page).toHaveURL(DASHBOARD_URL);
-		await expect(
-			page.getByRole("heading", { name: "Dashboard" })
-		).toBeVisible();
+		await page.waitForURL(LOGIN_URL);
+		await expect(page).toHaveURL(LOGIN_URL);
 	});
 
 	// AC-008 extension: clicking 去登录 navigates to /login

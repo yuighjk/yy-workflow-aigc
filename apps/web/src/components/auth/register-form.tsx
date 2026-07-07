@@ -35,7 +35,7 @@ const registerSchema = z
 
 /**
  * 注册表单：经 better-auth（authClient.signUp.email）在 Aurora 创建用户，
- * 成功后自动登录并跳转 /dashboard。用户名映射到 better-auth 的 name 字段。
+ * 成功后跳转 /login 让用户手动登录。用户名映射到 better-auth 的 name 字段。
  */
 export function RegisterForm() {
 	const navigate = useNavigate();
@@ -66,7 +66,7 @@ export function RegisterForm() {
 					return;
 				}
 
-				await navigate({ to: "/dashboard" });
+				await navigate({ to: "/login" });
 			} catch {
 				setAuthError(AUTH_UNAVAILABLE_MESSAGE);
 			}
