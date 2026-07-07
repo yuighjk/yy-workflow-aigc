@@ -18,6 +18,8 @@ export function createAuth() {
 		trustedOrigins: env.CORS_ORIGIN,
 		emailAndPassword: {
 			enabled: true,
+			// 注册后不自动登录：前端注册成功即跳 /login 由用户手动登录（两步式流程）。
+			autoSignIn: false,
 		},
 		secret: env.BETTER_AUTH_SECRET,
 		baseURL: env.BETTER_AUTH_URL,
