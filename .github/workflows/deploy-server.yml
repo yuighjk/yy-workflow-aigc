@@ -1,0 +1,130 @@
+# ============================================================
+# Deploy server (apps/server) → AWS Lambda + API Gateway via SAM
+# ------------------------------------------------------------
+# 把 Hono 后端打成 Lambda，用 AWS SAM 部署进现有 VPC（复用现有 Aurora）。
+# 对应本地手动流程：pnpm --filter server build:lambda → sam build → sam deploy。
+#
+# 需要在仓库里配置(Settings → Secrets and variables → Actions):
+#
+#   Secrets(密钥,加密):
+#     AWS_ACCESS_KEY_ID       —— IAM 用户 access key id
+#     AWS_SECRET_ACCESS_KEY   —— 对应 secret access key
+#     DATABASE_URL            —— Aurora 连接串(结尾勿带 ?sslmode=require；密码里 # 写成 %23)
+#     BETTER_AUTH_SECRET      —— better-auth 密钥(≥32 位随机串)
+#
+#   Variables(变量,明文即可):
+#     AWS_REGION              —— 如 ap-northeast-1
+#     SAM_STACK_NAME          —— CloudFormation stack 名，如 yy-workflow-server
+#     CORS_ORIGIN             —— 允许跨域的前端源，如 https://your-web.example.com
+#
+# ⚠️ 该 IAM 用户需要比"只传 S3"大得多的权限(SAM 要建 CFN/Lambda/EC2/APIGW/IAM 角色)：
+#     cloudformation:*、lambda:*、apigateway:*、s3:*(SAM 产物桶)、
+#     ec2:*(VPC/子网/NAT/SG/EIP/路由)、iam:CreateRole/PassRole/AttachRolePolicy 等。
+#     权限不足会在 sam deploy 阶段报 AccessDenied。
+#
+# 想改用 GitHub OIDC 免密钥:见下方 configure-aws-credentials 注释。
+# ============================================================
+
+name: Deploy Server to Lambda (SAM)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "apps/server/**"
+      - "packages/**"
+      - "template.yaml"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/deploy-server.yml"
+  workflow_dispatch: {} # 支持在 Actions 页面手动触发
+
+# 同一分支上新推送取消正在跑的旧部署，避免并发改同一个 stack
+concurrency:
+  group: deploy-server-${{ github.ref }}
+  cancel-in-progress: false # 部署中途取消可能让 CFN stack 卡在中间态，故不取消
+
+permissions:
+  contents: read
+  # 改用 OIDC 免密钥方式时取消下一行注释：
+  # id-token: write
+
+jobs:
+  deploy:
+    name: Build & deploy via SAM
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        # 用占位 DATABASE_URL + 跳过 env 校验，让 postinstall 的 prisma generate 顺利跑完。
+        env:
+          SKIP_ENV_VALIDATION: "1"
+          DATABASE_URL: "postgresql://user:pass@localhost:5432/placeholder"
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        # Lambda bundle 需要生成好的 Prisma client（driver-adapter，纯 JS）。
+        env:
+          SKIP_ENV_VALIDATION: "1"
+          DATABASE_URL: "postgresql://user:pass@localhost:5432/placeholder"
+        run: pnpm db:generate
+
+      - name: Prebuild Lambda bundle
+        # 预打包到 apps/server/dist-lambda/（含 index.mjs + certs/），供 SAM 的 makefile 复制。
+        env:
+          SKIP_ENV_VALIDATION: "1"
+          DATABASE_URL: "postgresql://user:pass@localhost:5432/placeholder"
+        run: pnpm --filter server build:lambda
+
+      - name: Setup SAM CLI
+        uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ vars.AWS_REGION }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # —— OIDC 免密钥方案：删掉上面两行 access-key，改用下行，并在顶部打开 id-token: write ——
+          # role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
+      - name: SAM build
+        run: sam build
+
+      - name: SAM deploy
+        # 参数从 Secrets/Variables 注入（不依赖 gitignored 的 samconfig.toml）。
+        # VPC/子网/AuroraSG 用 template.yaml 里的默认值；如需覆盖可在此追加 --parameter-overrides。
+        run: |
+          set -euo pipefail
+          sam deploy \
+            --stack-name "${{ vars.SAM_STACK_NAME }}" \
+            --region "${{ vars.AWS_REGION }}" \
+            --capabilities CAPABILITY_IAM \
+            --resolve-s3 \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides \
+              "DatabaseUrl=${{ secrets.DATABASE_URL }}" \
+              "BetterAuthSecret=${{ secrets.BETTER_AUTH_SECRET }}" \
+              "CorsOrigin=${{ vars.CORS_ORIGIN }}"
+
+      - name: Output API URL
+        run: |
+          aws cloudformation describe-stacks \
+            --stack-name "${{ vars.SAM_STACK_NAME }}" \
+            --region "${{ vars.AWS_REGION }}" \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \
+            --output text

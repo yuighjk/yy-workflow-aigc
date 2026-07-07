@@ -1,0 +1,214 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  yy-workflow-aigc server (Hono on Lambda) + API Gateway，部署进现有 VPC，
+  复用现有 Aurora。新增 NAT Gateway(1 个公有子网) + 2 个私有子网放 Lambda，
+  Lambda 经 NAT 调 GitHub API，经 VPC 内网连 Aurora（DB 不暴露公网）。
+
+# ---------------------------------------------------------------------------
+# 参数：把"现有资源"以参数传入，模板只新增 NAT/子网/Lambda/API，不新建 VPC/DB。
+# 首次 `sam deploy --guided` 时会逐个询问；默认值已按你账号现状填好。
+# ---------------------------------------------------------------------------
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Default: vpc-06e535e0d55e64fdd
+    Description: 现有 VPC（Aurora 所在）
+  PublicSubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Default: subnet-0587d2882bbd77d64
+    Description: 现有公有子网，用于放 NAT Gateway（ap-northeast-1a）
+  PrivateSubnet1Cidr:
+    Type: String
+    Default: 172.31.128.0/20
+    Description: 新私有子网 1 的 CIDR（Lambda 用，勿与现有子网重叠）
+  PrivateSubnet2Cidr:
+    Type: String
+    Default: 172.31.144.0/20
+    Description: 新私有子网 2 的 CIDR（Lambda 用）
+  PrivateSubnet1Az:
+    Type: AWS::EC2::AvailabilityZone::Name
+    Default: ap-northeast-1a
+  PrivateSubnet2Az:
+    Type: AWS::EC2::AvailabilityZone::Name
+    Default: ap-northeast-1c
+  AuroraSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Default: sg-0fa1f22a2b4e37550
+    Description: Aurora 的安全组（模板会给它加一条：允许 Lambda SG 访问 5432）
+  DatabaseUrl:
+    Type: String
+    NoEcho: true
+    Description: >
+      Aurora 连接串，形如
+      postgresql://postgres:PASSWORD@database-workflow.cluster-xxxx.ap-northeast-1.rds.amazonaws.com:5432/postgres
+      （密码含特殊字符需 percent-encode；SSL 由代码用 CA bundle 处理，无需带 sslmode）
+  BetterAuthSecret:
+    Type: String
+    NoEcho: true
+    Description: better-auth 密钥（≥32 位随机串）
+  BetterAuthUrl:
+    Type: String
+    Default: https://placeholder.example.com
+    Description: >
+      better-auth baseURL。本作业的 GitHub 功能不依赖它，填合法 URL 即可通过校验；
+      首次部署后如需真实认证，改成 Outputs.ApiUrl 的值再 deploy 一次。
+  CorsOrigin:
+    Type: String
+    Default: http://localhost:3001
+    Description: 允许跨域的前端源（部署前端后改成其地址）
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+    Runtime: nodejs22.x
+
+Resources:
+  # ========================================================================
+  # 1) 网络：NAT Gateway（放现有公有子网）+ 2 个新私有子网 + 私有路由表
+  # ========================================================================
+  NatEip:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEip.AllocationId
+      SubnetId: !Ref PublicSubnetId
+      Tags:
+        - Key: Name
+          Value: yy-workflow-nat
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VpcId
+      CidrBlock: !Ref PrivateSubnet1Cidr
+      AvailabilityZone: !Ref PrivateSubnet1Az
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: yy-workflow-private-1
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VpcId
+      CidrBlock: !Ref PrivateSubnet2Cidr
+      AvailabilityZone: !Ref PrivateSubnet2Az
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: yy-workflow-private-2
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VpcId
+      Tags:
+        - Key: Name
+          Value: yy-workflow-private-rt
+
+  # 私有子网默认路由 → NAT，供 Lambda 出网调用 GitHub API
+  PrivateDefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  PrivateSubnet1RouteAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet1
+
+  PrivateSubnet2RouteAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet2
+
+  # ========================================================================
+  # 2) 安全组：Lambda 用；并放行 Lambda → Aurora:5432
+  # ========================================================================
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: yy-workflow Lambda SG
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: yy-workflow-lambda-sg
+
+  # 给现有 Aurora SG 加入站：允许来自 Lambda SG 的 5432
+  AuroraIngressFromLambda:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref AuroraSecurityGroupId
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref LambdaSecurityGroup
+      Description: Allow Lambda to reach Aurora
+
+  # ========================================================================
+  # 3) Lambda（整个 Hono app）+ HTTP API
+  # ========================================================================
+  ServerFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: makefile
+    Properties:
+      Handler: index.handler
+      CodeUri: apps/server/
+      Environment:
+        Variables:
+          DATABASE_URL: !Ref DatabaseUrl
+          BETTER_AUTH_SECRET: !Ref BetterAuthSecret
+          BETTER_AUTH_URL: !Ref BetterAuthUrl
+          CORS_ORIGIN: !Ref CorsOrigin
+          NODE_ENV: production
+          # CA bundle 被 makefile 复制到 /var/task/certs/ 下
+          RDS_CA_PATH: /var/task/certs/rds-global-bundle.pem
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+      Events:
+        ApiRoot:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ServerHttpApi
+            Path: /
+            Method: ANY
+        ApiProxy:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ServerHttpApi
+            Path: /{proxy+}
+            Method: ANY
+
+  ServerHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: "$default"
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway 基址（前端 VITE_SERVER_URL 用它）
+    Value: !Sub "https://${ServerHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+  LambdaSecurityGroupId:
+    Description: Lambda 安全组 ID
+    Value: !Ref LambdaSecurityGroup
+  NatEipAddress:
+    Description: NAT 出口公网 IP（Lambda 调 GitHub 时的来源 IP）
+    Value: !Ref NatEip
