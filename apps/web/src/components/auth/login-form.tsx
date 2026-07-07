@@ -1,30 +1,33 @@
 import { useForm } from "@tanstack/react-form";
-import { Link } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { Button } from "@yy-workflow-aigc/ui/components/button";
 import { Input } from "@yy-workflow-aigc/ui/components/input";
 import { Label } from "@yy-workflow-aigc/ui/components/label";
 import { useState } from "react";
 import z from "zod";
 
+import { authClient } from "@/lib/auth-client";
+
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const MOCK_DELAY_MS = 400;
 
 const INPUT_CLASS =
 	"h-11 rounded-lg border-gray-300 bg-white text-gray-900 text-sm";
 const LABEL_CLASS = "mb-1.5 text-gray-700 text-sm";
 const ERROR_CLASS = "text-red-600 text-sm";
+const AUTH_ERROR_MESSAGE = "邮箱或密码错误，请检查后重试";
+const AUTH_UNAVAILABLE_MESSAGE = "登录服务暂不可用，请稍后重试";
 
 const loginSchema = z.object({
 	email: z
 		.string()
 		.min(1, "请输入邮箱")
 		.regex(EMAIL_REGEX, "请输入正确的邮箱格式"),
-	password: z.string().min(1, "请输入密码").min(6, "密码至少 6 位"),
+	password: z.string().min(1, "请输入密码").min(8, "密码至少 8 位"),
 });
 
-/** 登录表单（纯前端 mock）：校验通过后模拟延迟并在页内展示"登录成功"，不跳转。 */
 export function LoginForm() {
-	const [succeeded, setSucceeded] = useState(false);
+	const navigate = useNavigate();
+	const [authError, setAuthError] = useState<string | null>(null);
 
 	const form = useForm({
 		defaultValues: {
@@ -34,37 +37,43 @@ export function LoginForm() {
 		validators: {
 			onSubmit: loginSchema,
 		},
-		onSubmit: async () => {
-			setSucceeded(false);
-			// 本阶段用 300–500ms 模拟请求延迟（PRD §7.3），无真实后端。
-			await new Promise((resolve) => setTimeout(resolve, MOCK_DELAY_MS));
-			setSucceeded(true);
+		onSubmit: async ({ value }) => {
+			setAuthError(null);
+
+			try {
+				const result = await authClient.signIn.email({
+					email: value.email,
+					password: value.password,
+				});
+
+				if (result.error) {
+					setAuthError(result.error.message ?? AUTH_ERROR_MESSAGE);
+					return;
+				}
+
+				await navigate({ to: "/dashboard" });
+			} catch {
+				setAuthError(AUTH_UNAVAILABLE_MESSAGE);
+			}
 		},
 	});
 
 	return (
 		<div>
-			{succeeded ? (
+			{authError ? (
 				<div
-					className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-green-700 text-sm"
-					role="status"
+					className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700 text-sm"
+					role="alert"
 				>
-					<span>登录成功</span>
-					<Link
-						className="ml-2 font-medium text-blue-600 hover:underline"
-						to="/github"
-					>
-						查看 GitHub 账户 →
-					</Link>
+					{authError}
 				</div>
 			) : null}
 
 			<form
 				className="space-y-4"
-				// 成功后用户编辑任一字段即清除"登录成功"提示，避免陈旧反馈。
 				onChange={() => {
-					if (succeeded) {
-						setSucceeded(false);
+					if (authError) {
+						setAuthError(null);
 					}
 				}}
 				onSubmit={(e) => {

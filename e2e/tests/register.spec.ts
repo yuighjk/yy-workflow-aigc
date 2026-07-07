@@ -1,7 +1,12 @@
+import path from "node:path";
 import { expect, test } from "@playwright/test";
-import path from "path";
 
 const SCREENSHOTS_DIR = path.join(import.meta.dirname, "../../screenshots");
+
+// URL 断言用的顶层正则常量（biome useTopLevelRegex）。
+const REGISTER_URL = /\/register/;
+const LOGIN_URL = /\/login/;
+const DASHBOARD_URL = /\/dashboard/;
 
 test.describe("Register Page — Feature 2 AC Verification", () => {
 	test.beforeEach(async ({ page }) => {
@@ -11,7 +16,7 @@ test.describe("Register Page — Feature 2 AC Verification", () => {
 
 	// AC-001: User can open /register page
 	test("AC-001 — /register page renders without error", async ({ page }) => {
-		await expect(page).toHaveURL(/\/register/);
+		await expect(page).toHaveURL(REGISTER_URL);
 		const title = page.locator("h1");
 		await expect(title).toBeVisible();
 	});
@@ -62,8 +67,9 @@ test.describe("Register Page — Feature 2 AC Verification", () => {
 		await expect(page.getByText("请输入正确的邮箱格式")).toBeVisible();
 	});
 
-	// AC-005: Password shorter than 6 chars shows length error
-	test("AC-005 — password shorter than 6 chars shows length error", async ({
+	// AC-005: Password shorter than 8 chars shows length error
+	// （对齐 better-auth 默认 minPasswordLength=8 与登录表单）
+	test("AC-005 — password shorter than 8 chars shows length error", async ({
 		page,
 	}) => {
 		await page
@@ -73,7 +79,7 @@ test.describe("Register Page — Feature 2 AC Verification", () => {
 		await page.locator('input[name="password"]').fill("123");
 		await page.locator('input[name="confirmPassword"]').fill("123");
 		await page.getByRole("button", { name: "注册" }).click();
-		await expect(page.getByText("密码至少 6 位")).toBeVisible();
+		await expect(page.getByText("密码至少 8 位")).toBeVisible();
 	});
 
 	// AC-006: Mismatched passwords show mismatch error
@@ -90,16 +96,29 @@ test.describe("Register Page — Feature 2 AC Verification", () => {
 		await expect(page.getByText("两次输入的密码不一致")).toBeVisible();
 	});
 
-	// AC-007: Submit button shows "注册中..." and is disabled during loading
-	test("AC-007 — submit button shows loading state (注册中...) for 300-500ms", async ({
+	// AC-007: Submit button shows "注册中..." and is disabled while signup is in flight.
+	// 拦截 better-auth 注册请求并延迟返回，以便观察 loading 态（不打真实后端/Aurora）。
+	test("AC-007 — submit button shows loading state (注册中...) during signup", async ({
 		page,
 	}) => {
+		await page.route("**/sign-up/email", async (route) => {
+			await new Promise((resolve) => setTimeout(resolve, 800));
+			await route.fulfill({
+				status: 200,
+				contentType: "application/json",
+				body: JSON.stringify({
+					token: "test-token",
+					user: { id: "u1", email: "test@example.com", name: "testuser" },
+				}),
+			});
+		});
+
 		await page
 			.locator('input[name="username"], input[placeholder="请输入用户名"]')
 			.fill("testuser");
 		await page.locator('input[type="email"]').fill("test@example.com");
-		await page.locator('input[name="password"]').fill("123456");
-		await page.locator('input[name="confirmPassword"]').fill("123456");
+		await page.locator('input[name="password"]').fill("12345678");
+		await page.locator('input[name="confirmPassword"]').fill("12345678");
 
 		await page.getByRole("button", { name: "注册" }).click();
 
@@ -111,36 +130,57 @@ test.describe("Register Page — Feature 2 AC Verification", () => {
 		).toBeDisabled();
 	});
 
-	// AC-008: Successful registration shows success message and page stays / login link works
-	test("AC-008 — successful registration shows success banner with login link", async ({
+	// AC-008: Successful registration creates the user (via better-auth) and navigates to /dashboard.
+	// 拦截注册 + 会话查询，验证成功后自动登录并跳转（前端契约，不依赖真实 Aurora）。
+	test("AC-008 — successful registration navigates to /dashboard", async ({
 		page,
 	}) => {
+		await page.route("**/sign-up/email", (route) =>
+			route.fulfill({
+				status: 200,
+				contentType: "application/json",
+				body: JSON.stringify({
+					token: "test-token",
+					user: { id: "u1", email: "test@example.com", name: "testuser" },
+				}),
+			})
+		);
+		// /dashboard 的路由守卫会调用 get-session，返回一个有效会话让其通过。
+		await page.route("**/get-session", (route) =>
+			route.fulfill({
+				status: 200,
+				contentType: "application/json",
+				body: JSON.stringify({
+					session: {
+						id: "s1",
+						userId: "u1",
+						expiresAt: "2999-01-01T00:00:00.000Z",
+					},
+					user: { id: "u1", email: "test@example.com", name: "testuser" },
+				}),
+			})
+		);
+
 		await page
 			.locator('input[name="username"], input[placeholder="请输入用户名"]')
 			.fill("testuser");
 		await page.locator('input[type="email"]').fill("test@example.com");
-		await page.locator('input[name="password"]').fill("123456");
-		await page.locator('input[name="confirmPassword"]').fill("123456");
+		await page.locator('input[name="password"]').fill("12345678");
+		await page.locator('input[name="confirmPassword"]').fill("12345678");
 		await page.getByRole("button", { name: "注册" }).click();
 
-		// Wait for success message
-		await expect(page.getByText("注册成功，请登录")).toBeVisible({
-			timeout: 3000,
-		});
-		// The success banner should have role="status"
-		const banner = page.locator('[role="status"]');
-		await expect(banner).toBeVisible();
-		await expect(banner).toContainText("注册成功，请登录");
-
-		// Footer link to /login should be present
-		await expect(page.getByRole("link", { name: "去登录" })).toBeVisible();
+		await page.waitForURL(DASHBOARD_URL);
+		await expect(page).toHaveURL(DASHBOARD_URL);
+		await expect(
+			page.getByRole("heading", { name: "Dashboard" })
+		).toBeVisible();
 	});
 
 	// AC-008 extension: clicking 去登录 navigates to /login
 	test("AC-008 (ext) — 去登录 link navigates to /login", async ({ page }) => {
 		await page.getByRole("link", { name: "去登录" }).click();
-		await page.waitForURL(/\/login/);
-		await expect(page).toHaveURL(/\/login/);
+		await page.waitForURL(LOGIN_URL);
+		await expect(page).toHaveURL(LOGIN_URL);
 	});
 });
 
