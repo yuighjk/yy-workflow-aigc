@@ -77,10 +77,12 @@ jobs:
 
       - name: Generate Prisma client
         # Lambda bundle 需要生成好的 Prisma client（driver-adapter，纯 JS）。
+        # 直接调 prisma（不经 turbo）——turbo 默认不透传 DATABASE_URL 给任务，会导致
+        # prisma.config.ts 解析 env 失败。这里直接跑并显式给占位 DATABASE_URL。
         env:
           SKIP_ENV_VALIDATION: "1"
           DATABASE_URL: "postgresql://user:pass@localhost:5432/placeholder"
-        run: pnpm db:generate
+        run: pnpm --filter @yy-workflow-aigc/db exec prisma generate
 
       - name: Prebuild Lambda bundle
         # 预打包到 apps/server/dist-lambda/（含 index.mjs + certs/），供 SAM 的 makefile 复制。
