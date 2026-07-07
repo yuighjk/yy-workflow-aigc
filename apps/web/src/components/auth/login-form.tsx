@@ -1,4 +1,5 @@
 import { useForm } from "@tanstack/react-form";
+import { Link } from "@tanstack/react-router";
 import { Button } from "@yy-workflow-aigc/ui/components/button";
 import { Input } from "@yy-workflow-aigc/ui/components/input";
 import { Label } from "@yy-workflow-aigc/ui/components/label";
@@ -48,7 +49,13 @@ export function LoginForm() {
 					className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-green-700 text-sm"
 					role="status"
 				>
-					登录成功
+					<span>登录成功</span>
+					<Link
+						className="ml-2 font-medium text-blue-600 hover:underline"
+						to="/github"
+					>
+						查看 GitHub 账户 →
+					</Link>
 				</div>
 			) : null}
 

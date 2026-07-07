@@ -1,0 +1,14 @@
+model GithubAccount {
+  id          String   @id @default(cuid())
+  githubId    Int      @unique
+  login       String
+  name        String?
+  avatarUrl   String?
+  htmlUrl     String?
+  bio         String?
+  publicRepos Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("github_account")
+}
