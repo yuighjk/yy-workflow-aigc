@@ -53,6 +53,8 @@ jobs:
   deploy:
     name: Build & deploy via SAM
     runs-on: ubuntu-latest
+    # secrets/variables 配在名为 aws-iam 的 Environment 下，需在此声明才能读到。
+    environment: aws-iam
     steps:
       - name: Checkout
         uses: actions/checkout@v4
