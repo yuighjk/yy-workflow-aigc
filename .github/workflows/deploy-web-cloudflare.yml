@@ -1,0 +1,95 @@
+# ============================================================
+# Deploy web (apps/web) → Cloudflare Pages
+# ------------------------------------------------------------
+# vite build 产出 apps/web/dist，再用 wrangler(cloudflare/wrangler-action)
+# 部署到 Cloudflare Pages 项目 yy-workflow-aigc。
+#
+# 需要在仓库里配置(Settings → Secrets and variables → Actions):
+#
+#   Repository secrets(注意：放仓库级，不要放进某个 Environment):
+#     CLOUDFLARE_API_TOKEN    —— Cloudflare API Token(权限含 Pages 编辑)
+#     CLOUDFLARE_ACCOUNT_ID   —— Cloudflare 账号 ID
+#
+#   Repository variables(可选):
+#     VITE_SERVER_URL         —— 后端 API 基址，打进前端包(tRPC/better-auth 用)。
+#                                不配则用下方默认(已部署的 Lambda API)。
+#
+# API Token 生成:Cloudflare Dashboard → My Profile → API Tokens →
+#   Create Token → 用 "Edit Cloudflare Workers" 模板(含 Pages)，或自定义
+#   Account.Cloudflare Pages = Edit。
+# ============================================================
+
+name: Deploy Web to Cloudflare Pages
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "apps/web/**"
+      - "packages/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - ".github/workflows/deploy-web-cloudflare.yml"
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-web-cf-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Build & deploy to Pages
+    runs-on: ubuntu-latest
+    env:
+      TURBO_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        # 前端构建不需要真实 DB/后端密钥；占位值 + 跳过服务端 env 校验，让 postinstall 的 prisma generate 跑完。
+        env:
+          SKIP_ENV_VALIDATION: "1"
+          DATABASE_URL: "postgresql://user:pass@localhost:5432/placeholder"
+        run: pnpm install --frozen-lockfile
+
+      - name: Build web
+        # VITE_SERVER_URL 缺失时构建会失败(env 校验)；用仓库变量，未配则回退到已部署的 Lambda API。
+        env:
+          VITE_SERVER_URL: ${{ vars.VITE_SERVER_URL || 'https://kn0oq7adrl.execute-api.ap-northeast-1.amazonaws.com' }}
+        run: pnpm exec turbo run build --filter=web
+
+      - name: Verify build output
+        run: |
+          if [ ! -f apps/web/dist/index.html ]; then
+            echo "::error::apps/web/dist/index.html 不存在，构建可能失败" && exit 1
+          fi
+
+      - name: Ensure Pages project exists
+        # 首次部署前若项目不存在，wrangler pages deploy 会报错；这里幂等创建(已存在则忽略失败)。
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages project create yy-workflow-aigc --production-branch=master
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy apps/web/dist --project-name=yy-workflow-aigc --branch=master
