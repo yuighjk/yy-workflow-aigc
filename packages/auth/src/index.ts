@@ -6,12 +6,16 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 export function createAuth() {
 	const prisma = createPrismaClient();
 
+	// 生产为跨域 https 部署，需 sameSite:none + secure 才能种下会话 cookie；
+	// 本地开发是 http://localhost，secure cookie 会被浏览器拒收，故放宽为 lax + 非 secure。
+	const isProduction = env.NODE_ENV === "production";
+
 	return betterAuth({
 		database: prismaAdapter(prisma, {
 			provider: "postgresql",
 		}),
 
-		trustedOrigins: [env.CORS_ORIGIN],
+		trustedOrigins: env.CORS_ORIGIN,
 		emailAndPassword: {
 			enabled: true,
 		},
@@ -19,8 +23,8 @@ export function createAuth() {
 		baseURL: env.BETTER_AUTH_URL,
 		advanced: {
 			defaultCookieAttributes: {
-				sameSite: "none",
-				secure: true,
+				sameSite: isProduction ? "none" : "lax",
+				secure: isProduction,
 				httpOnly: true,
 			},
 		},
