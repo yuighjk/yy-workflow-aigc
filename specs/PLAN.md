@@ -11,6 +11,16 @@
 
 **推荐执行顺序**：1 → 2（feature 2 复用 feature 1 建立的认证面板 shell 与视觉 tokens；`2.T-001 依赖 1.T-001`）。
 
+## 架构练习作业（2026-07-14）
+
+来源：AWS 架构练习作业。**一个作业、三步一体**（非三个独立 feature）。
+
+| 序号 | feature | 说明 | 依赖 | 状态 |
+| ---- | ------- | ---- | ---- | ---- |
+| 3 | github-profile-go | 新增 Go 微服务链路（不动原业务）：Go 连现有 Aurora + 迁移部分 Node 抓取逻辑 + 生成个人简介（Phase 1）→ ECR/ECS/Fargate/内网 ALB/Cloud Map/Lambda BFF 上云（Phase 2）→ Cloudflare+CodeBuild+IAM 的按 PR 独立环境（Phase 3） | 复用现有 `github_account` 表 | 待开发 |
+
+**关键决策**：沿用 Postgres/Aurora（不引入 MySQL）｜ BFF 方案 A（轻 Lambda BFF）｜ Go 放顶层 `services/profile-go`｜ CI 用 CodeBuild｜ PR 级 DB「共享 dev 库 + 仅迁移校验」。详见 `specs/3.github-profile-go/`。
+
 ## ID 编号约定
 
 - 功能需求 / 任务 / 验收标准 ID **在单个 feature 内编号**，跨 feature 用 `{序号}.` 前缀区分。
