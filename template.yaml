@@ -6,7 +6,7 @@ Description: >
   Lambda 经 NAT 调 GitHub API，经 VPC 内网连 Aurora（DB 不暴露公网）。
 
 # ---------------------------------------------------------------------------
-# 参数：把"现有资源"以参数传入，模板只新增 NAT/子网/Lambda/API，不新建 VPC/DB。
+# 参数：是 SAM/CloudFormation 部署时可以传入的参数。把"现有资源"以参数传入，模板只新增 NAT/子网/Lambda/API，不新建 VPC/DB。
 # 首次 `sam deploy --guided` 时会逐个询问；默认值已按你账号现状填好。
 # ---------------------------------------------------------------------------
 Parameters:
@@ -57,6 +57,11 @@ Parameters:
     Type: String
     Default: http://localhost:3001
     Description: 允许跨域的前端源（部署前端后改成其地址）
+
+  # 跳板机 AMI：用 SSM 公共参数自动解析最新 Amazon Linux 2023 (arm64)，不硬编码 AMI ID。
+  BastionAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64
 
 Globals:
   Function:
@@ -202,6 +207,72 @@ Resources:
     Properties:
       StageName: "$default"
 
+  # ========================================================================
+  # 4) SSM 跳板机：放私有子网，无公网 IP、无入站端口；经 NAT 出网连 SSM 端点。
+  #    用途：本地经 `aws ssm start-session` 端口转发，直连私有 Aurora
+  #    （跑迁移 / Prisma Studio / Go 连库），DB 无需暴露公网。
+  # ========================================================================
+  BastionSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: yy-workflow SSM bastion SG (egress only, no inbound)
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: yy-workflow-bastion-sg
+
+  # 给现有 Aurora SG 放行来自跳板机 SG 的 5432（与 Lambda 那条并列）
+  AuroraIngressFromBastion:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref AuroraSecurityGroupId
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref BastionSecurityGroup
+      Description: Allow bastion to reach Aurora
+
+  BastionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      # 仅挂 SSM 托管策略：允许 Session Manager 管理该实例，无需开 22 端口/密钥。
+      # AmazonSSMManagedInstanceCore 是 AWS 官方托管策略,给了 EC2 上的 SSM agent 与 SSM 服务通信所需的最小权限。            
+      # 没有这个策略,aws ssm start-session 就找不到这台机器
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Tags:
+        - Key: Name
+          Value: yy-workflow-bastion-role
+
+  BastionInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref BastionRole
+
+  BastionInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t4g.nano
+      ImageId: !Ref BastionAmiId
+      IamInstanceProfile: !Ref BastionInstanceProfile
+      SubnetId: !Ref PrivateSubnet1
+      SecurityGroupIds:
+        - !Ref BastionSecurityGroup
+      Tags:
+        - Key: Name
+          Value: yy-workflow-bastion
+
 Outputs:
   ApiUrl:
     Description: API Gateway 基址（前端 VITE_SERVER_URL 用它）
@@ -212,3 +283,6 @@ Outputs:
   NatEipAddress:
     Description: NAT 出口公网 IP（Lambda 调 GitHub 时的来源 IP）
     Value: !Ref NatEip
+  BastionInstanceId:
+    Description: SSM 跳板机实例 ID（本地端口转发用：aws ssm start-session --target 此值）
+    Value: !Ref BastionInstance

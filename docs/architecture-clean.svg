@@ -1,0 +1,293 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1980" height="880" viewBox="0 0 1980 880" font-family="-apple-system,'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Noto Sans CJK SC',sans-serif">
+  <style>
+    text{dominant-baseline:middle}
+    .vpc{fill:#eef4ff;stroke:#2E5AAC;stroke-width:1.8;stroke-dasharray:6 4}
+    .pub{fill:#f2fbf4;stroke:#2f9e44;stroke-width:1.4}
+    .prv{fill:#f6f1ff;stroke:#8C4FFF;stroke-width:1.4}
+    .prvd{fill:#fff7ee;stroke:#e8a24a;stroke-width:1.4}
+    .card{fill:#ffffff;stroke-width:2}
+    .orange{stroke:#ED7100}.purple{stroke:#8C4FFF}.blue{stroke:#2E5AAC}
+    .db{stroke:#3B48CC}.green{stroke:#2f9e44}.dark{stroke:#24292f}.gray{stroke:#8a94a6}
+    .f-title{fill:#12233b;font-size:15px;font-weight:700}
+    .t{fill:#1f2d3d;font-size:13px;text-anchor:middle}
+    .tb{fill:#12233b;font-size:13.5px;font-weight:600;text-anchor:middle}
+    .s{fill:#5a6472;font-size:10.5px;text-anchor:middle}
+    .zone{fill:#33445c;font-size:12px;font-weight:600}
+    .al{fill:#3a4a63;font-size:11px;text-anchor:middle}
+    .e{fill:none;stroke-width:2.4}
+    .eb{stroke:#1e6fe0}.eg{stroke:#2f9e44}.ek{stroke:#3a4a63}.ep{stroke:#8C4FFF}.eo{stroke:#e8590c}
+    .dash{stroke-dasharray:7 5}
+    .banned{stroke:#e03131;stroke-width:2.4}
+    .cdlayer{fill:#fff8f0;stroke:#E8730C;stroke-width:2.2;stroke-dasharray:8 5}
+    .cdcard{fill:#fffdfa;stroke:#E8730C;stroke-width:2}
+    .cdt{fill:#8a3f00;font-size:13.5px;font-weight:600;text-anchor:middle}
+    .cds{fill:#a6672e;font-size:10.5px;text-anchor:middle}
+    .cdz{fill:#8a3f00;font-size:12px;font-weight:700}
+    .cdal{fill:#b5560c;font-size:11px;text-anchor:middle}
+    .ecd{fill:none;stroke:#E8730C;stroke-width:2.4}
+  </style>
+  <defs>
+    <marker id="b" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#1e6fe0"/></marker>
+    <marker id="g" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#2f9e44"/></marker>
+    <marker id="k" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#3a4a63"/></marker>
+    <marker id="p" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8C4FFF"/></marker>
+    <marker id="o" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#e8590c"/></marker>
+    <marker id="cd" markerWidth="10" markerHeight="10" refX="7" refY="3.2" orient="auto"><path d="M0,0 L7.5,3.2 L0,6.4 Z" fill="#E8730C"/></marker>
+  </defs>
+  <rect x="0" y="0" width="1980" height="880" fill="#ffffff"/>
+  <text class="f-title" x="30" y="34" font-size="19">VPC 架构（Lambda + 容器 双计算层）· 修正版</text>
+
+  <!-- VPC boundary -->
+  <rect class="vpc" x="290" y="64" width="830" height="772" rx="14"/>
+  <text class="zone" x="700" y="82" text-anchor="middle" font-size="13">AWS VPC</text>
+
+  <!-- Internet Gateway on top border -->
+  <rect class="card gray" x="330" y="110" width="150" height="44" rx="7"/>
+  <text class="tb" x="405" y="132" font-size="12">Internet Gateway</text>
+
+  <!-- public subnet -->
+  <rect class="pub" x="320" y="176" width="210" height="360" rx="9"/>
+  <text class="zone" x="335" y="194" font-size="11.5">公有子网 · Public Subnet</text>
+  <!-- private app subnet -->
+  <rect class="prv" x="575" y="176" width="250" height="172" rx="9"/>
+  <text class="zone" x="590" y="194" font-size="11.5">私有应用子网 · Lambda</text>
+  <!-- private data subnet -->
+  <rect class="prv" x="860" y="176" width="240" height="172" rx="9" style="fill:#eef0ff;stroke:#3B48CC"/>
+  <text class="zone" x="875" y="194" font-size="11.5">私有数据库子网</text>
+  <!-- container subnet -->
+  <rect class="prvd" x="575" y="500" width="525" height="316" rx="9"/>
+  <text class="zone" x="590" y="518" font-size="11.5">私有应用子网 · 容器（ECS / Fargate）</text>
+
+  <!-- external left -->
+  <text x="77" y="150" font-size="11" text-anchor="middle" fill="#5a6472">WEB</text>
+  <text class="tb" x="77" y="182">用户浏览器</text>
+  <rect class="card purple" x="150" y="220" width="118" height="80" rx="8"/>
+  <text x="209" y="244" font-size="11" text-anchor="middle" fill="#5a6472">API</text>
+  <text class="tb" x="209" y="268">API Gateway</text>
+  <text class="s" x="209" y="284">HTTPS 入口</text>
+
+  <rect class="card gray" x="34" y="452" width="150" height="72" rx="8"/>
+  <text x="109" y="476" font-size="11" text-anchor="middle" fill="#5a6472">NET</text>
+  <text class="tb" x="109" y="500">互联网 / 第三方 API</text>
+
+  <text x="80" y="612" font-size="11" text-anchor="middle" fill="#5a6472">OPS</text>
+  <text class="tb" x="80" y="642">运维 / 管理员</text>
+
+  <!-- 跳板机以逻辑运维入口表示；实际 EC2 必须部署到选定子网 -->
+  <rect class="card green" x="520" y="102" width="210" height="68" rx="8"/>
+  <text class="tb" x="625" y="122">跳板机 / SSM</text>
+  <text class="s" x="625" y="140">运维逻辑入口</text>
+  <text class="s" x="625" y="156">实际部署时需选择子网</text>
+
+  <!-- NAT Gateway 位于公有子网 -->
+  <rect class="card purple" x="340" y="330" width="170" height="66" rx="8"/>
+  <text class="tb" x="425" y="352">NAT Gateway</text>
+  <text class="s" x="425" y="374">私有子网出网</text>
+
+  <rect class="card gray" x="340" y="448" width="170" height="60" rx="8"/>
+  <text class="tb" x="425" y="470" font-size="12">Security Group</text>
+  <text class="s" x="425" y="489">安全组 · 流量放行规则</text>
+
+  <!-- Lambda -->
+  <rect class="card orange" x="600" y="212" width="200" height="110" rx="9"/>
+  <text x="700" y="240" font-size="20" text-anchor="middle" fill="#ED7100" font-weight="700">λ</text>
+  <text class="tb" x="700" y="268">Lambda</text>
+  <text class="s" x="700" y="286">入口逻辑 / 校验 / 转发</text>
+  <text class="s" x="700" y="304">短平快 · 按需触发</text>
+
+  <!-- Database -->
+  <rect class="card db" x="880" y="212" width="200" height="110" rx="9"/>
+  <text x="980" y="242" font-size="11" text-anchor="middle" fill="#5a6472">DB</text>
+  <text class="tb" x="980" y="270">数据库 (Aurora)</text>
+  <text class="s" x="980" y="288">仅容器侧读写</text>
+  <text class="s" x="980" y="306">不暴露公网</text>
+
+  <!-- Docker + Fargate in container subnet -->
+  <rect class="card blue" x="620" y="600" width="180" height="150" rx="10"/>
+  <text x="710" y="636" font-size="11" text-anchor="middle" fill="#5a6472">DOCKER</text>
+  <text class="tb" x="710" y="668">Docker 镜像</text>
+  <text class="s" x="710" y="688">Go 服务</text>
+  <text class="s" x="710" y="712">常驻进程 · 连接池</text>
+
+  <rect class="card orange" x="870" y="600" width="190" height="150" rx="10"/>
+  <text x="965" y="636" font-size="11" text-anchor="middle" fill="#5a6472">ECS</text>
+  <text class="tb" x="965" y="668">ECS / Fargate</text>
+  <text class="s" x="965" y="688">免运维容器运行</text>
+  <text class="s" x="965" y="712">数据库读写主体</text>
+
+  <rect class="card dark" x="700" y="770" width="290" height="34" rx="7" style="fill:#f6f8fb"/>
+  <text class="s" x="845" y="787" font-size="11">镜像仓库 ECR ｜ 演进方向：ECS → Kubernetes</text>
+
+  <!-- Cloud Map -->
+  <rect class="card green" x="600" y="430" width="170" height="60" rx="8"/>
+  <text class="tb" x="685" y="452" font-size="12">AWS Cloud Map</text>
+  <text class="s" x="685" y="472">服务发现（仅解析地址）</text>
+
+  <!-- ============ ARROWS ============ -->
+  <!-- user -> API GW -->
+  <path class="e ek" d="M110,166 L118,166 L118,260 L146,260" marker-end="url(#k)"/>
+  <text class="al" x="92" y="215">HTTPS</text>
+
+  <!-- API GW -> Lambda : 穿过跳板机与 NAT 之间的空白走廊，不碰任何盒子 -->
+  <path class="e eb" d="M268,296 L596,296" marker-end="url(#b)"/>
+  <text class="al" x="450" y="312" fill="#1e6fe0">路由请求（不经跳板机）</text>
+
+  <!-- admin -> bastion (运维路，独立) -->
+  <path class="e eg" d="M130,608 L300,608 L300,136 L516,136" marker-end="url(#g)"/>
+  <text class="al" x="250" y="596" fill="#2f9e44">SSM 隧道</text>
+  <!-- bastion -> database (dashed, 运维专用, 顶部走线) -->
+  <path class="e eg dash" d="M730,136 L760,136 L760,100 L980,100 L980,208" marker-end="url(#g)"/>
+  <text class="al" x="745" y="90" fill="#2f9e44">运维直连数据库（跳板机专用）</text>
+
+  <!-- Lambda -> NAT -> internet -->
+  <path class="e eo dash" d="M600,300 L520,360 L512,360" marker-end="url(#o)"/>
+  <path class="e eo dash" d="M340,368 L200,470 L188,472" marker-end="url(#o)"/>
+  <text class="al" x="300" y="430" fill="#e8590c">出网调外部 API</text>
+
+  <!-- Lambda -X-> database (BANNED) -->
+  <path class="e banned" d="M800,300 L876,300" marker-end="url(#b)" opacity="0.3"/>
+  <line x1="822" y1="286" x2="854" y2="318" class="banned"/>
+  <line x1="854" y1="286" x2="822" y2="318" class="banned"/>
+  <text x="838" y="336" font-size="11" text-anchor="middle" fill="#e03131" font-weight="700">禁止直连</text>
+
+  <!-- Lambda -> Cloud Map (discovery, dashed) -->
+  <path class="e eg dash" d="M660,322 L680,426" marker-end="url(#g)"/>
+  <text class="al" x="636" y="380" fill="#2f9e44">① 查地址</text>
+  <!-- Cloud Map .. Fargate (dashed discovery) -->
+  <path class="e eg dash" d="M700,490 L760,590" marker-end="url(#g)"/>
+
+  <!-- Lambda -> Fargate (actual traffic) -->
+  <path class="e ep" d="M770,322 L900,360 L920,596" marker-end="url(#p)"/>
+  <text class="al" x="905" y="430" fill="#8C4FFF">② 直连后端</text>
+
+  <!-- Docker -> Fargate -->
+  <path class="e eb" d="M800,672 L866,672" marker-end="url(#b)"/>
+  <text class="al" x="833" y="660" fill="#1e6fe0">部署</text>
+  <!-- Fargate -> Database (real DB access) -->
+  <path class="e eo" d="M1000,600 L1010,540 L1010,360 L1000,326" marker-end="url(#o)"/>
+  <text class="al" x="1050" y="450" fill="#e8590c">CRUD · 5432</text>
+
+  <!-- ============ LEGEND ============ -->
+  <rect x="30" y="700" width="230" height="150" rx="9" fill="#f6f8fb" stroke="#c3ccd8" stroke-width="1.2"/>
+  <text class="zone" x="46" y="722">图例</text>
+  <line x1="46" y1="746" x2="86" y2="746" class="e eb" marker-end="url(#b)"/>
+  <text class="al" x="150" y="746" text-anchor="start">业务请求路径</text>
+  <line x1="46" y1="770" x2="86" y2="770" class="e ep" marker-end="url(#p)"/>
+  <text class="al" x="150" y="770" text-anchor="start">Lambda→容器 调用</text>
+  <line x1="46" y1="794" x2="86" y2="794" class="e eo" marker-end="url(#o)"/>
+  <text class="al" x="150" y="794" text-anchor="start">容器→数据库 读写</text>
+  <line x1="46" y1="818" x2="86" y2="818" class="e eg dash" marker-end="url(#g)"/>
+  <text class="al" x="150" y="818" text-anchor="start">服务发现 / 运维（虚线）</text>
+  <text x="46" y="840" font-size="12" fill="#e03131">✗</text>
+  <text class="al" x="155" y="840" text-anchor="start" fill="#e03131">禁止 Lambda 直连数据库</text>
+
+  <!-- ============================================================ -->
+  <!-- 橙色层：CI/CD + IaC（按 PR 部署）                              -->
+  <!-- ============================================================ -->
+  <rect class="cdlayer" x="1160" y="64" width="790" height="772" rx="16"/>
+  <text class="cdz" x="1180" y="88" font-size="14">CI/CD + IaC 层（每 PR 一个 CDK Stage／资源栈；同账号 + 区域）</text>
+
+  <!-- GitHub PR 触发 -->
+  <rect class="cdcard" x="1185" y="120" width="150" height="72" rx="9"/>
+  <text x="1260" y="146" font-size="11" text-anchor="middle" fill="#5a6472">GITHUB</text>
+  <text class="cdt" x="1260" y="170">GitHub PR</text>
+  <text class="cds" x="1260" y="186">opened / synchronized / closed</text>
+
+  <!-- CDK (IaC 引擎) -->
+  <rect class="cdcard" x="1185" y="360" width="150" height="150" rx="12" style="fill:#fff2e2"/>
+  <text class="cdt" x="1260" y="400" font-size="18">CDK App</text>
+  <text class="cds" x="1260" y="426">1 PR → 1 Stage → 多个 Stack</text>
+  <text class="cds" x="1260" y="446">synth / deploy / destroy</text>
+  <text class="cds" x="1260" y="466">经 CloudFormation 部署角色</text>
+
+  <!-- CodeBuild (在 VPC 内跑迁移) -->
+  <rect class="cdcard" x="1420" y="120" width="180" height="86" rx="9"/>
+  <text class="cdt" x="1510" y="142">AWS CodeBuild</text>
+  <text class="cds" x="1510" y="160">私有子网 + 专用 SG：跑 DB 迁移</text>
+  <text class="cds" x="1510" y="178">DB 仅允许该 SG；不经跳板机</text>
+  <text class="cds" x="1510" y="194">GitHub / Jira：NAT 或 VPC Endpoint</text>
+
+  <!-- IAM Role -->
+  <rect class="cdcard" x="1660" y="120" width="150" height="86" rx="9"/>
+  <text class="cdt" x="1735" y="146">IAM Role</text>
+  <text class="cds" x="1735" y="166">最小权限 + 部署角色</text>
+  <text class="cds" x="1735" y="184">仅允许 pr-* 资源</text>
+
+  <!-- 守卫 -->
+  <rect class="cdcard" x="1420" y="240" width="390" height="60" rx="9" style="fill:#fff2e2"/>
+  <text class="cdt" x="1615" y="262" font-size="12">Guard：校验分支 / Jira · 检测 DB 变更 · 产出 GitHub Check</text>
+  <text class="cds" x="1615" y="282">设为 Required Check；失败则禁止合并</text>
+
+  <!-- per-PR 环境标题 -->
+  <text class="cdz" x="1420" y="336" font-size="12.5">每个 PR 的逻辑隔离 Stage（资源名前缀：pr-&lt;编号&gt;-&lt;hash&gt;）</text>
+
+  <!-- PR #1: yideng-1111 -->
+  <rect class="cdcard" x="1420" y="352" width="530" height="132" rx="11"/>
+  <text class="cdt" x="1455" y="374" text-anchor="start" fill="#8a3f00">Stage · pr-1111-a1b2</text>
+  <rect class="cdcard" x="1436" y="388" width="110" height="80" rx="8"/>
+  <text class="cdt" x="1491" y="416" font-size="16" fill="#ED7100" font-weight="700">λ</text>
+  <text class="cds" x="1491" y="440">Lambda</text>
+  <rect class="cdcard" x="1560" y="388" width="110" height="80" rx="8"/>
+  <text class="cds" x="1615" y="414" font-size="11">ECS</text>
+  <text class="cds" x="1615" y="440">ECS</text>
+  <rect class="cdcard" x="1684" y="388" width="110" height="80" rx="8"/>
+  <text class="cds" x="1739" y="414" font-size="11">WEB</text>
+  <text class="cds" x="1739" y="440">前端 Web</text>
+  <rect class="cdcard" x="1808" y="388" width="120" height="80" rx="8" style="stroke:#3B48CC"/>
+  <text class="cds" x="1868" y="414" font-size="11">DB</text>
+  <text class="cds" x="1868" y="436" style="fill:#3B48CC">隔离 DB</text>
+  <text class="cds" x="1868" y="452" style="fill:#3B48CC">明确隔离粒度</text>
+
+  <!-- PR #2: yideng-222 -->
+  <rect class="cdcard" x="1420" y="500" width="530" height="132" rx="11"/>
+  <text class="cdt" x="1455" y="522" text-anchor="start" fill="#8a3f00">Stage · pr-222-c3d4</text>
+  <rect class="cdcard" x="1436" y="536" width="110" height="80" rx="8"/>
+  <text class="cdt" x="1491" y="564" font-size="16" fill="#ED7100" font-weight="700">λ</text>
+  <text class="cds" x="1491" y="588">Lambda</text>
+  <rect class="cdcard" x="1560" y="536" width="110" height="80" rx="8"/>
+  <text class="cds" x="1615" y="562" font-size="11">ECS</text>
+  <text class="cds" x="1615" y="588">ECS</text>
+  <rect class="cdcard" x="1684" y="536" width="110" height="80" rx="8"/>
+  <text class="cds" x="1739" y="562" font-size="11">WEB</text>
+  <text class="cds" x="1739" y="588">前端 Web</text>
+  <rect class="cdcard" x="1808" y="536" width="120" height="80" rx="8" style="stroke:#3B48CC"/>
+  <text class="cds" x="1868" y="562" font-size="11">DB</text>
+  <text class="cds" x="1868" y="584" style="fill:#3B48CC">隔离 DB</text>
+  <text class="cds" x="1868" y="600" style="fill:#3B48CC">明确隔离粒度</text>
+
+  <!-- API Gateway Header 分发 -->
+  <rect class="cdcard" x="1420" y="656" width="530" height="86" rx="10" style="fill:#fff2e2"/>
+  <text class="cdt" x="1685" y="680">API Gateway · Host Header 分发（共享 HTTPS 入口）</text>
+  <text class="cds" x="1685" y="702">按 Host / Header 路由到对应 PR Stage</text>
+  <text class="cds" x="1685" y="720">pr-1111.dev.yideng.ai（前端 / API）→ pr-1111-a1b2</text>
+
+  <!-- 销毁提示 -->
+  <rect x="1185" y="560" width="150" height="86" rx="9" fill="#fdeaea" stroke="#e03131" stroke-width="1.6"/>
+  <text x="1260" y="586" font-size="12" text-anchor="middle" fill="#c92a2a" font-weight="700">PR 合并 / 关闭</text>
+  <text class="cds" x="1260" y="608" style="fill:#c92a2a">按 PR 定位 Stage 后销毁</text>
+  <text class="cds" x="1260" y="626" style="fill:#c92a2a">仅 pr-*；清 Header Rule / DB</text>
+
+  <!-- ===== 橙色层内部箭头 ===== -->
+  <!-- GitHub PR -> Guard -->
+  <path class="ecd" d="M1260,192 L1260,270 L1416,270" marker-end="url(#cd)"/>
+  <text class="cdal" x="1290" y="226">触发校验</text>
+  <!-- Guard -> CDK App：编排并部署 PR 的全部 AWS 资源 -->
+  <path class="ecd" d="M1420,270 L1380,270 L1380,410 L1339,410" marker-end="url(#cd)"/>
+  <text class="cdal" x="1400" y="344">通过后部署</text>
+  <!-- Guard -> CodeBuild（迁移） -->
+  <path class="ecd" d="M1510,240 L1510,210" marker-end="url(#cd)"/>
+  <text class="cdal" x="1585" y="226">有 DB 迁移才触发</text>
+  <!-- IAM -> CodeBuild -->
+  <path class="ecd dash" d="M1658,163 L1604,163" marker-end="url(#cd)" style="stroke-dasharray:6 4"/>
+  <!-- CDK -> PR#1 -->
+  <path class="ecd" d="M1335,420 L1416,400" marker-end="url(#cd)"/>
+  <!-- CDK -> PR#2 -->
+  <path class="ecd" d="M1335,470 L1390,470 L1390,555 L1416,555" marker-end="url(#cd)"/>
+  <text class="cdal" x="1385" y="500">起环境</text>
+  <!-- CDK -> API Gateway Header 路由配置（避开 PR 资源卡片） -->
+  <path class="ecd" d="M1335,486 L1390,486 L1390,699 L1416,699" marker-end="url(#cd)"/>
+
+  <!-- ===== 跨层连接：CodeBuild 进 VPC 连数据库 ===== -->
+  <path class="ecd dash" d="M1420,180 L1385,180 L1385,215 L1120,215 L1082,208" marker-end="url(#o)" style="stroke:#e8590c"/>
+  <text class="cdal" x="1245" y="228" style="fill:#e8590c">CodeBuild 进 VPC 跑迁移 → 数据库</text>
+</svg>
