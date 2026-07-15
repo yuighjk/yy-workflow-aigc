@@ -57,3 +57,7 @@ temp
 .aws-sam/
 apps/server/dist-lambda/
 samconfig.toml
+
+# AWS CDK build artifacts
+cdk.out/
+infra/cdk.out/

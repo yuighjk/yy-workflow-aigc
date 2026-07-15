@@ -1,0 +1,12 @@
+services:
+  profile-go:
+    build:
+      context: ../..
+      dockerfile: services/profile-go/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      PORT: "8080"
+      RDS_CA_PATH: ${RDS_CA_PATH:-}
+    ports:
+      - "8080:8080"
+    restart: unless-stopped

@@ -72,7 +72,15 @@ export function RegisterForm() {
 			}
 		},
 	});
+	/*
+<form.Field name="username"> 表单字段，name：字段名
 
+每个字段都有自己的状态，包括其当前值、验证状态、错误消息和其他元数据。
+const {
+  value,
+  meta: { errors, isValidating },
+} = field.state
+*/
 	return (
 		<div>
 			{authError ? (

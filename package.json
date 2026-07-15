@@ -16,6 +16,8 @@
     "db:studio": "turbo run db:studio -F @yy-workflow-aigc/db",
     "db:generate": "turbo run db:generate -F @yy-workflow-aigc/db",
     "db:migrate": "turbo run db:migrate -F @yy-workflow-aigc/db",
+    "infra:synth": "pnpm --dir infra synth",
+    "infra:check": "pnpm --dir infra check-types",
     "check": "ultracite check",
     "fix": "ultracite fix"
   },

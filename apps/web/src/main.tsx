@@ -6,6 +6,7 @@ import Loader from "./components/loader";
 import { routeTree } from "./routeTree.gen";
 import { queryClient, trpc } from "./utils/trpc";
 
+// QueryClientProvider 包裹组件，
 const router = createRouter({
 	routeTree,
 	defaultPreload: "intent",

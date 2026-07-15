@@ -275,12 +275,54 @@ Resources:
           Value: yy-workflow-bastion
 
 Outputs:
+  ExistingVpcId:
+    Description: Phase 2 CDK 引用的现有 VPC ID（资源仍归本 SAM Stack 管理）
+    Value: !Ref VpcId
+    Export:
+      Name: yy-workflow-server:VpcId
+  ExistingPublicSubnetId:
+    Description: 现有公有子网 ID
+    Value: !Ref PublicSubnetId
+    Export:
+      Name: yy-workflow-server:PublicSubnetId
+  PrivateSubnet1Id:
+    Description: Phase 2 ECS/ALB/Lambda BFF 复用的私有子网 1
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: yy-workflow-server:PrivateSubnet1Id
+  PrivateSubnet2Id:
+    Description: Phase 2 ECS/ALB/Lambda BFF 复用的私有子网 2
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: yy-workflow-server:PrivateSubnet2Id
+  PrivateSubnet1AvailabilityZone:
+    Description: 私有子网 1 的可用区
+    Value: !Ref PrivateSubnet1Az
+    Export:
+      Name: yy-workflow-server:PrivateSubnet1Az
+  PrivateSubnet2AvailabilityZone:
+    Description: 私有子网 2 的可用区
+    Value: !Ref PrivateSubnet2Az
+    Export:
+      Name: yy-workflow-server:PrivateSubnet2Az
+  PrivateRouteTableId:
+    Description: 两个 Phase 2 私有子网共用的路由表 ID
+    Value: !Ref PrivateRouteTable
+    Export:
+      Name: yy-workflow-server:PrivateRouteTableId
+  ExistingAuroraSecurityGroupId:
+    Description: Phase 2 仅向该 Aurora SG 增加 ECS 来源的 5432 入站规则
+    Value: !Ref AuroraSecurityGroupId
+    Export:
+      Name: yy-workflow-server:AuroraSecurityGroupId
   ApiUrl:
     Description: API Gateway 基址（前端 VITE_SERVER_URL 用它）
     Value: !Sub "https://${ServerHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
   LambdaSecurityGroupId:
     Description: Lambda 安全组 ID
     Value: !Ref LambdaSecurityGroup
+    Export:
+      Name: yy-workflow-server:LambdaSecurityGroupId
   NatEipAddress:
     Description: NAT 出口公网 IP（Lambda 调 GitHub 时的来源 IP）
     Value: !Ref NatEip
