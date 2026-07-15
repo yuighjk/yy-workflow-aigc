@@ -19,7 +19,7 @@
 | ---- | ------- | ---- | ---- | ---- |
 | 3 | github-profile-go | 新增 Go 微服务链路（不动原业务）：Go 连现有 Aurora + 迁移部分 Node 抓取逻辑 + 生成个人简介（Phase 1）→ ECR/ECS/Fargate/内网 ALB/Cloud Map/Lambda BFF 上云（Phase 2）→ Cloudflare+CodeBuild+IAM 的按 PR 独立环境（Phase 3） | 复用现有 `github_account` 表 | 待开发 |
 
-**关键决策**：沿用 Postgres/Aurora（不引入 MySQL）｜ BFF 方案 A（轻 Lambda BFF）｜ Go 放顶层 `services/profile-go`｜ CI 用 CodeBuild｜ PR 级 DB「共享 dev 库 + 仅迁移校验」。详见 `specs/3.github-profile-go/`。
+**关键决策**：沿用 Postgres/Aurora（不引入 MySQL）｜ BFF 方案 A（轻 Lambda BFF）｜ Go 放顶层 `services/profile-go`｜ Phase 2 IaC 用 CDK 并引用现有 SAM 网络｜ CI 用 CodeBuild｜ PR 级 DB「共享 dev 库 + 仅迁移校验」。详见 `specs/3.github-profile-go/`。
 
 ## ID 编号约定
 

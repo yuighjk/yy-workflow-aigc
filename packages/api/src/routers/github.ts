@@ -29,6 +29,7 @@ function toProfile(u: GithubUser) {
 	};
 }
 
+// https://docs.github.com/zh/rest/users/users?apiVersion=2026-03-10
 export const githubRouter = router({
 	// 列出已保存的 GitHub 账户卡片（最新在前）。
 	list: publicProcedure.query(() =>

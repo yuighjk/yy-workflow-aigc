@@ -1,0 +1,22 @@
+{
+  "name": "@yy-workflow-aigc/infra",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "synth": "cdk synth",
+    "diff": "cdk diff",
+    "deploy:shared": "cdk deploy yy-workflow-phase2-shared",
+    "deploy:service": "cdk deploy yy-workflow-phase2-service"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.180.0",
+    "constructs": "^10.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "aws-cdk": "^2.180.0",
+    "tsx": "^4.19.2",
+    "typescript": "catalog:"
+  }
+}

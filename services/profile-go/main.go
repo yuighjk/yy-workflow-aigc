@@ -17,16 +17,19 @@ func main() {
 		log.Fatalf("加载配置失败: %v", err)
 	}
 
-	mux := http.NewServeMux()
-	// 健康检查：不依赖数据库，供 ALB/ECS 探活使用。
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
-	})
+	// 建立数据库连接池（连不上则直接退出，暴露问题）。
+	startCtx, startCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	store, err := NewStore(startCtx, cfg.DatabaseURL, cfg.RDSCAPath)
+	startCancel()
+	if err != nil {
+		log.Fatalf("连接数据库失败: %v", err)
+	}
+	defer store.Close()
+	log.Println("数据库连接成功")
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           mux,
+		Handler:           NewHandler(store).Routes(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

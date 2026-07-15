@@ -10,7 +10,7 @@
 
 - 项目名: yy-workflow-aigc
 - 架构类型: monorepo（Turborepo + pnpm workspaces，全栈 TS）+ 新增顶层 `services/`（Go，不入 pnpm workspace）
-- 涉及层：新增 Go 服务（`services/profile-go`）、新增 Lambda BFF、前端新增页面（`apps/web`）、基础设施（Terraform）、CI/CD（CodeBuild）
+- 涉及层：新增 Go 服务（`services/profile-go`）、新增 Lambda BFF、前端新增页面（`apps/web`）、基础设施（AWS CDK v2）、CI/CD（CodeBuild）
 - **不动**：现有 Hono/tRPC 后端、`packages/api` 的 `github` router、better-auth、现有 SAM/Lambda 部署
 
 ## 需求版本
@@ -35,6 +35,7 @@
 | BFF | **方案 A**：新增轻量 Lambda BFF 站在 API Gateway 与内网 ALB 之间（纯编排转发），练「Lambda 在私网、只调内网」 |
 | Go 位置 | 顶层新目录 `services/profile-go/`（独立于 pnpm workspace） |
 | CI 工具 | 按作业要求用 **CodeBuild**（参考项目实际用 GitHub Actions + Terraform，此处换工具练习） |
+| IaC | **AWS CDK v2 + TypeScript**；Phase 2 引用现有 SAM Stack 的网络，不重复创建线上资源 |
 | PR 级 DB 隔离 | **共享一个 dev 库 + 仅迁移校验（validate/dry-run）**，PR 环境不真改共享库（最省、最安全） |
 
 ## 功能需求
@@ -53,10 +54,10 @@
 ### Phase 2 — 容器化上云（ECR + ECS/Fargate + 内网 ALB + Cloud Map + BFF）
 
 7. [F-201] Go 服务 Dockerfile（多阶段构建，产出精简镜像）+ 本地 `compose` 起服务。
-8. [F-202] Terraform：VPC（跨 2 AZ，公网/私网子网、NAT、IGW）、安全组链。
-9. [F-203] Terraform：ECR 仓库；ECS 集群 + Fargate 服务跑 Go 容器；任务从 Secrets Manager 注入 DB 凭证。
-10. [F-204] Terraform：**内网 ALB**，按路径 `/profile/*` 路由到 Go 服务目标组（南北向：BFF → Go）。
-11. [F-205] Terraform：Cloud Map 私有命名空间，用于**服务间东西向发现**（单服务时预留，多服务时启用）。
+8. [F-202] CDK：通过 CloudFormation Exports 引用现有 SAM Stack 的 VPC、两个私有子网和 Aurora SG；不重复创建 NAT、子网、Lambda 或跳板机。
+9. [F-203] CDK：ECR 仓库；ECS 集群 + Fargate 服务跑 Go 容器；任务从 Secrets Manager 注入 DB 凭证。
+10. [F-204] CDK：**内网 ALB**，按路径 `/profile/*` 路由到 Go 服务目标组（南北向：BFF → Go）。
+11. [F-205] CDK：Cloud Map 私有命名空间，用于**服务间东西向发现**（单服务时预留，多服务时启用）。
 12. [F-206] 新增 **Lambda BFF**（方案 A）：API Gateway(HTTP) → Lambda BFF（私网、只调内网 ALB、免 NAT）→ Go 服务。
 13. [F-207] Go 服务经 NAT 出网抓 GitHub；Aurora 私网无公网。
 
@@ -71,18 +72,18 @@
 
 - 安全：DB 密码进 Secrets Manager，容器启动注入；GitHub PAT 用完即弃、不入库、不记日志；Aurora 私网无公网；遵循 `.claude/rules/security.md`。
 - 成本：NAT + ALB + RDS + Fargate 均按小时计费；**验证完即 `terraform destroy`**，只开一套环境，建议配 AWS Budgets 1 美元告警。
-- 环境隔离：Terraform workspace 管 `test`/`prod`（或 `dev`），`name_prefix = profile-${workspace}`。
+- 环境隔离：稳定共享资源与服务资源拆成两个 CDK Stack；Phase 3 再增加 `pr-*` 临时 Stack。
 - 可观测：容器日志进 CloudWatch Logs。
 
 ## 明确的非目标 / 纠错
 
 - ❌ **不**把现有 Hono/TS 后端改写成 Go —— Go 是新增的并行服务。
 - ❌ 作业原文「用 Cloud Map 链接 lambda 接口」表述**有误**：南北向 Lambda BFF → Go 走**内网 ALB 按路径**；**Cloud Map 只做服务间（Go↔Go）东西向发现**，Lambda 不经 Cloud Map 调服务。单个 Go 服务时 Cloud Map 实际用不上，仅为演示/预留。
-- ❌ 不引入 MySQL；不引入 CDK（作业指定 CodeBuild；IaC 用 Terraform 对齐参考项目）。
+- ❌ 不引入 MySQL；不让 SAM 与 CDK 同时拥有同一个 AWS 资源。
 - ❌ PR 预览环境不对共享库执行破坏性迁移（只校验）。
 
 ## 验收标准
 
 - [AC-1] Phase 1：本地 `go run` 起服务，前端输入用户名可返回并展示中文简介；`go test ./...` 通过。
-- [AC-2] Phase 2：`terraform apply` 后，经 API Gateway → BFF → 内网 ALB → Fargate(Go) → Aurora 全链路可访问；Go 能经 NAT 抓 GitHub。
+- [AC-2] Phase 2：`cdk deploy` 后，经 API Gateway → BFF → 内网 ALB → Fargate(Go) → Aurora 全链路可访问；Go 能经现有 NAT 抓 GitHub。
 - [AC-3] Phase 3：开一个 PR 触发 CodeBuild 构建并部署 `pr-N` 环境，Cloudflare 出预览 URL；PR 关闭后资源被清理。

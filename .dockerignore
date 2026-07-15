@@ -1,0 +1,8 @@
+**
+!services/
+!services/profile-go/
+!services/profile-go/**
+!packages/
+!packages/db/
+!packages/db/certs/
+!packages/db/certs/rds-global-bundle.pem

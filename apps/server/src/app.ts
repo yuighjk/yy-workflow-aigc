@@ -10,6 +10,12 @@ import { logger } from "hono/logger";
 // Hono 应用本体（不含具体运行时）。Node 入口(index.ts)与 Lambda 入口(lambda.ts)共用。
 export const app = new Hono();
 
+// https://hono.dev/docs/ app.use ( [path,] 中间件)
+// logger：中间件，传入请求，传出响应等。
+
+// 路由逻辑只写一份：app.ts
+// 本地运行用：index.ts
+// AWS Lambda 运行用：lambda.ts
 app.use(logger());
 app.use(
 	"/*",
@@ -20,7 +26,7 @@ app.use(
 		credentials: true,
 	})
 );
-
+// 多种方法
 app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 
 app.use(

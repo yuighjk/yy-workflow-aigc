@@ -19,7 +19,7 @@ export const queryClient = new QueryClient({
 		},
 	}),
 });
-
+// client trpc
 export const trpcClient = createTRPCClient<AppRouter>({
 	links: [
 		httpBatchLink({

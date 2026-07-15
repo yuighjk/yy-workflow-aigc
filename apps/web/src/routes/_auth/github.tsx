@@ -17,7 +17,7 @@ function GithubPage() {
 	const [error, setError] = useState<string | null>(null);
 
 	const accounts = useQuery(trpc.github.list.queryOptions());
-
+	// 意思是：当新增或删除 GitHub 账户成功后，把 trpc.github.list 这条查询缓存标记为失效，React Query 会重新请求后端，页面上的列表就更新了。
 	const invalidateList = () =>
 		queryClient.invalidateQueries({ queryKey: trpc.github.list.queryKey() });
 

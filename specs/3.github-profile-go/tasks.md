@@ -28,15 +28,15 @@
 ### Phase 2 — 容器化上云（按小时计费，验完即拆）
 
 - [ ] 3.T-201: `Dockerfile`（多阶段：builder + 精简 runtime）+ `compose.yaml`（本地 Go + Postgres）；本地容器跑通 ~40min
-- [ ] 3.T-202: Terraform 骨架 `infra/`：`providers/versions/variables/locals/outputs.tf` + workspace（test）约定 ~40min
-- [ ] 3.T-203: `network.tf` + `security.tf`：VPC 跨 2 AZ、公私子网、NAT、IGW、安全组链 ~1h
-- [ ] 3.T-204: `rds.tf`：data source 引用**现有 Aurora**（不新建）+ 给 Go SG 放行 5432 入站 ~30min
-- [ ] 3.T-205: `ecr.tf` + `iam-ecs.tf`：ECR 仓库、ECS 执行/任务角色 ~30min
-- [ ] 3.T-206: `ecs.tf`/`ecs-profile.tf`：集群 + Fargate 服务 + 任务定义（Secrets 注入 DB 凭证、CloudWatch 日志）~1h
-- [ ] 3.T-207: `alb.tf` + `cloudmap.tf`：内网 ALB + `/profile/*` 目标组；Cloud Map 私有命名空间（预留东西向）~1h
-- [ ] 3.T-208: `bff.tf` + Lambda BFF 代码：API Gateway(HTTP) → BFF（私网、只调内网 ALB）→ Go ~1h
-- [ ] 3.T-209: `terraform apply` 起 test 环境；推首个镜像到 ECR；Phase 2 端到端验收（AC-2）~40min
-- [ ] 3.T-210: `terraform destroy` 拆 test 环境 + 确认无残留计费资源 ~15min
+- [x] 3.T-202: CDK v2 TypeScript 骨架 `infra/`；拆分 shared/service Stack ~40min
+- [x] 3.T-203: SAM 增加跨栈 Outputs；CDK 引用现有 VPC、双私网子网和 Aurora SG，不重复建 NAT/网络 ~1h
+- [x] 3.T-204: Aurora SG 增加来自 ECS SG 的 5432 入站规则，不新建数据库 ~30min
+- [x] 3.T-205: ECR 仓库、ECS 执行角色与任务角色 ~30min
+- [x] 3.T-206: ECS Cluster + Fargate Service + Task Definition（Secrets 注入 DB 凭证、CloudWatch 日志）~1h
+- [x] 3.T-207: 内网 ALB + `/profile/*` Target Group；Cloud Map 私有命名空间 ~1h
+- [x] 3.T-208: Lambda BFF + HTTP API：API Gateway → 私网 BFF → Internal ALB → Go ~1h
+- [ ] 3.T-209: 部署 shared Stack、推首个镜像、部署 service Stack；Phase 2 端到端验收（AC-2）~40min
+- [ ] 3.T-210: 按 service → shared 顺序销毁 CDK Stack，并确认 SAM Stack 不受影响 ~15min
 
 ### Phase 3 — 按 PR 的独立环境（Cloudflare + CodeBuild + IAM）
 
@@ -56,6 +56,6 @@
 
 ## 执行约定
 
-- 每完成一个 Phase 做一次手动验收再进下一 Phase；Phase 2/3 涉及计费，**验证后立即 `terraform destroy`**，只开一套环境，配 Budgets 告警。
+- 每完成一个 Phase 做一次手动验收再进下一 Phase；Phase 2/3 涉及计费，**验证后立即按文档销毁 CDK 临时资源**，只开一套环境，配 Budgets 告警。
 - 编码遵循项目规则：TS 侧 `pnpm fix`/`pnpm check`；Go 侧 `go vet` + `go test`。
 - 提交遵循 `.claude/rules/git-workflow.md`：先开分支（如 `feature/github-profile-go`），Conventional Commits。
