@@ -266,7 +266,8 @@ Resources:
       InstanceType: t4g.nano
       ImageId: !Ref BastionAmiId
       IamInstanceProfile: !Ref BastionInstanceProfile
-      SubnetId: !Ref PrivateSubnet1
+      # 放 PrivateSubnet2（ap-northeast-1c）：ap-northeast-1a 曾报 t4g.nano 容量不足。
+      SubnetId: !Ref PrivateSubnet2
       SecurityGroupIds:
         - !Ref BastionSecurityGroup
       Tags:
