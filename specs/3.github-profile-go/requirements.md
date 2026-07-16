@@ -63,9 +63,9 @@
 
 ### Phase 3 — 按 PR 的独立环境（Cloudflare + CodeBuild + IAM）
 
-14. [F-301] **Cloudflare**：每个 PR 一个预览前端（PR preview URL），指向共享 test 后端。
-15. [F-302] **CodeBuild**（配 VPC，跑在内网）：`buildspec` 完成 分支/DB 守卫 → docker build Go → 推 ECR(`:pr-N`) → 有迁移则在 VPC 内对共享 dev 库做**迁移校验（不真改）** → 起/更新该 PR 的 ECS 服务。
-16. [F-303] **IAM**：给 CodeBuild 的最小权限角色（ECR push、ECS 部署、进 VPC 的 ENI 权限、读 Secrets）。
+14. [F-301] **Cloudflare**：每个 PR 一个预览前端（`pr-N`），通过 `x-yy-pr-number` 指向对应 PR ECS 服务。
+15. [F-302] **CodeBuild**（配 VPC，跑在内网）：`buildspec` 完成 DB 守卫 → docker build Go → 推 ECR(`:pr-N-SHA`) → 有迁移则在 VPC 内对共享 dev 库做**迁移 diff（不真改）** → CDK 起/更新该 PR 的 ECS 服务。
+16. [F-303] **IAM 三角色**：GitHub OIDC Role、CodeBuild Service Role、PR ECS Role；GitHub Action 通过私有 S3 Source 启动 CodeBuild，不保存 AWS 长期密钥或 GitHub OAuth Token。
 17. [F-304] PR 合并/关闭 → 自动销毁该 PR 的 ECS/target group/ALB 规则与前端预览。
 
 ## 非功能需求

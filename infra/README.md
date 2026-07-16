@@ -59,6 +59,8 @@ docker build --platform linux/amd64 \
   .
 docker push "$REPOSITORY_URI:$IMAGE_TAG"
 ```
+ FROM mirror.gcr.io/library/golang:1.25-alpine AS build
+
 
 ### 5. 准备数据库 Secret
 
@@ -76,8 +78,10 @@ docker push "$REPOSITORY_URI:$IMAGE_TAG"
 
 ```bash
 pnpm exec cdk deploy yy-workflow-phase2-service \
+  --exclusively \
   --parameters "ImageTag=$IMAGE_TAG" \
-  --parameters "DatabaseSecretArn=$DATABASE_SECRET_ARN"
+  --parameters "DatabaseSecretArn=$DATABASE_SECRET_ARN" \
+  --require-approval never
 ```
 
 部署输出的 `ProfileApiUrl` 是前端调用地址。请求链路为：
@@ -94,8 +98,10 @@ Cloud Map 注册 `profile-go.yy-workflow.internal`，用于后续服务间发现
 
 ```bash
 pnpm exec cdk deploy yy-workflow-phase2-service \
+  --exclusively \
   --parameters "ImageTag=$NEW_IMAGE_TAG" \
-  --parameters "DatabaseSecretArn=$DATABASE_SECRET_ARN"
+  --parameters "DatabaseSecretArn=$DATABASE_SECRET_ARN" \
+  --require-approval never
 ```
 
 ## 销毁顺序
@@ -106,3 +112,7 @@ pnpm exec cdk destroy yy-workflow-phase2-shared
 ```
 
 这不会删除 `yy-workflow-server`。ECR 使用 `RETAIN`，如需删除仓库及镜像必须显式处理。
+
+> Docker Hub 较慢时，`services/profile-go/Dockerfile` 使用 `mirror.gcr.io/library/golang` 的同源镜像加速 builder 拉取。
+
+Phase 3 的 PR 独立环境见 [`PHASE3.md`](./PHASE3.md)。

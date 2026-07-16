@@ -1,0 +1,145 @@
+name: Phase 3 PR Backend
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number
+        required: true
+        type: number
+      action:
+        description: Deploy or destroy the PR environment
+        options: [deploy, closed]
+        required: true
+        type: choice
+
+concurrency:
+  group: phase3-backend-${{ github.event.pull_request.number || inputs.pr_number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  backend:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    name: Build and reconcile PR backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'ap-northeast-1' }}
+      CODEBUILD_PROJECT: ${{ vars.PHASE3_CODEBUILD_PROJECT }}
+      PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+      SOURCE_BUCKET: ${{ vars.PHASE3_SOURCE_BUCKET }}
+    steps:
+      - name: Validate Phase 3 variables
+        env:
+          AWS_ROLE_ARN: ${{ vars.AWS_GITHUB_OIDC_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+          test -n "$AWS_ROLE_ARN"
+          test -n "$CODEBUILD_PROJECT"
+          test -n "$SOURCE_BUCKET"
+
+      - name: Checkout PR source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_GITHUB_OIDC_ROLE_ARN }}
+          role-session-name: phase3-pr-${{ env.PR_NUMBER }}
+
+      - name: Detect database changes
+        id: db_changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- packages/db/prisma; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Package and upload source
+        id: source
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          SOURCE_KEY="sources/pr-${PR_NUMBER}-${HEAD_SHA}.zip"
+          git archive --format=zip --output=phase3-source.zip "$HEAD_SHA"
+          aws s3 cp phase3-source.zip "s3://${SOURCE_BUCKET}/${SOURCE_KEY}"
+          echo "key=$SOURCE_KEY" >> "$GITHUB_OUTPUT"
+
+      - name: Start CodeBuild
+        id: build
+        env:
+          DB_CHANGED: ${{ steps.db_changes.outputs.changed }}
+          EVENT_ACTION: ${{ github.event.action || inputs.action }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          SOURCE_KEY: ${{ steps.source.outputs.key }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_ACTION" = "closed" ]; then
+            PR_ACTION="closed"
+          else
+            PR_ACTION="deploy"
+          fi
+          IMAGE_TAG="pr-${PR_NUMBER}-${HEAD_SHA:0:12}"
+          OVERRIDES="$(jq -nc \
+            --arg pr "$PR_NUMBER" \
+            --arg action "$PR_ACTION" \
+            --arg sha "$HEAD_SHA" \
+            --arg image "$IMAGE_TAG" \
+            --arg db "$DB_CHANGED" \
+            '[
+              {name:"PR_NUMBER",value:$pr,type:"PLAINTEXT"},
+              {name:"PR_ACTION",value:$action,type:"PLAINTEXT"},
+              {name:"COMMIT_SHA",value:$sha,type:"PLAINTEXT"},
+              {name:"IMAGE_TAG",value:$image,type:"PLAINTEXT"},
+              {name:"HAS_DB_CHANGES",value:$db,type:"PLAINTEXT"}
+            ]')"
+          BUILD_ID="$(aws codebuild start-build \
+            --project-name "$CODEBUILD_PROJECT" \
+            --source-location-override "${SOURCE_BUCKET}/${SOURCE_KEY}" \
+            --environment-variables-override "$OVERRIDES" \
+            --query 'build.id' \
+            --output text)"
+          echo "id=$BUILD_ID" >> "$GITHUB_OUTPUT"
+          echo "Started $BUILD_ID"
+
+      - name: Wait for CodeBuild
+        env:
+          BUILD_ID: ${{ steps.build.outputs.id }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 160); do
+            STATUS="$(aws codebuild batch-get-builds \
+              --ids "$BUILD_ID" \
+              --query 'builds[0].buildStatus' \
+              --output text)"
+            echo "CodeBuild status: $STATUS"
+            case "$STATUS" in
+              SUCCEEDED) exit 0 ;;
+              FAILED|FAULT|STOPPED|TIMED_OUT) exit 1 ;;
+            esac
+            sleep 15
+          done
+          echo "Timed out waiting for CodeBuild" >&2
+          exit 1
+
+      - name: Remove uploaded source
+        if: always() && steps.source.outputs.key != ''
+        env:
+          SOURCE_KEY: ${{ steps.source.outputs.key }}
+        run: aws s3 rm "s3://${SOURCE_BUCKET}/${SOURCE_KEY}"

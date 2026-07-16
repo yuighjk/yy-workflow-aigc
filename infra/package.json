@@ -7,7 +7,8 @@
     "synth": "cdk synth",
     "diff": "cdk diff",
     "deploy:shared": "cdk deploy yy-workflow-phase2-shared",
-    "deploy:service": "cdk deploy yy-workflow-phase2-service"
+    "deploy:service": "cdk deploy yy-workflow-phase2-service",
+    "deploy:phase3": "cdk deploy yy-workflow-phase3-pipeline"
   },
   "dependencies": {
     "aws-cdk-lib": "^2.180.0",

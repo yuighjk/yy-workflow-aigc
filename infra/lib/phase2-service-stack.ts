@@ -161,7 +161,8 @@ export class Phase2ServiceStack extends Stack {
 				]),
 			],
 			listener: props.shared.albListener,
-			priority: 100,
+			// PR rules use 1001..49000 plus x-yy-pr-number. Stable Phase 2 is the fallback.
+			priority: 49_999,
 		});
 
 		const bff = new lambda.Function(this, "ProfileBff", {
@@ -185,7 +186,7 @@ export class Phase2ServiceStack extends Stack {
 		const httpApi = new apigwv2.HttpApi(this, "ProfileHttpApi", {
 			apiName: "yy-workflow-profile-bff",
 			corsPreflight: {
-				allowHeaders: ["content-type", "authorization"],
+				allowHeaders: ["content-type", "authorization", "x-yy-pr-number"],
 				allowMethods: [apigwv2.CorsHttpMethod.ANY],
 				allowOrigins: ["*"],
 			},
