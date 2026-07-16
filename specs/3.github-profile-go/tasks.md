@@ -27,7 +27,7 @@
 
 ### Phase 2 — 容器化上云（按小时计费，验完即拆）
 
-- [ ] 3.T-201: `Dockerfile`（多阶段：builder + 精简 runtime）+ `compose.yaml`（本地 Go + Postgres）；本地容器跑通 ~40min
+- [x] 3.T-201: `Dockerfile`（多阶段：builder + 精简 runtime）+ `compose.yaml`；本地容器跑通 ~40min
 - [x] 3.T-202: CDK v2 TypeScript 骨架 `infra/`；拆分 shared/service Stack ~40min
 - [x] 3.T-203: SAM 增加跨栈 Outputs；CDK 引用现有 VPC、双私网子网和 Aurora SG，不重复建 NAT/网络 ~1h
 - [x] 3.T-204: Aurora SG 增加来自 ECS SG 的 5432 入站规则，不新建数据库 ~30min
@@ -35,16 +35,16 @@
 - [x] 3.T-206: ECS Cluster + Fargate Service + Task Definition（Secrets 注入 DB 凭证、CloudWatch 日志）~1h
 - [x] 3.T-207: 内网 ALB + `/profile/*` Target Group；Cloud Map 私有命名空间 ~1h
 - [x] 3.T-208: Lambda BFF + HTTP API：API Gateway → 私网 BFF → Internal ALB → Go ~1h
-- [ ] 3.T-209: 部署 shared Stack、推首个镜像、部署 service Stack；Phase 2 端到端验收（AC-2）~40min
+- [x] 3.T-209: 部署 shared Stack、推首个镜像、部署 service Stack；Phase 2 端到端验收（AC-2）~40min
 - [ ] 3.T-210: 按 service → shared 顺序销毁 CDK Stack，并确认 SAM Stack 不受影响 ~15min
 
 ### Phase 3 — 按 PR 的独立环境（Cloudflare + CodeBuild + IAM）
 
-- [ ] 3.T-301: IAM：CodeBuild 服务角色（ECR push、ECS 部署、创建 ENI 进 VPC、读 Secrets、写日志）最小权限 ~40min
-- [ ] 3.T-302: `buildspec.yml`：分支/DB 守卫 → docker build Go → 推 ECR `:pr-N` → 迁移**仅校验** → 起/更新 `pr-N` ECS 服务 ~1.5h
-- [ ] 3.T-303: CodeBuild 项目（配 VPC 私网子网 + SG）+ webhook 触发（PR 事件）~40min
-- [ ] 3.T-304: Cloudflare PR 预览：前端按 PR 出预览 URL，指向共享 test API ~40min
-- [ ] 3.T-305: PR 关闭清理：销毁 `pr-N` 的 ECS 服务/目标组/ALB 规则与前端预览 ~40min
+- [x] 3.T-301: IAM 三角色：GitHub OIDC、CodeBuild Service、PR ECS Role；无长期 AWS Key ~40min
+- [x] 3.T-302: `buildspec.phase3.yml`：DB 守卫 → docker build Go → 推 ECR `:pr-N-SHA` → 迁移 diff → CDK 起/更新 `pr-N` ECS 服务 ~1.5h
+- [x] 3.T-303: CodeBuild 项目（VPC 私网子网 + SG）+ GitHub OIDC/S3 Source 触发 ~40min
+- [x] 3.T-304: Cloudflare PR Preview：注入 PR Header，指向对应 ECS 服务 ~40min
+- [x] 3.T-305: PR 关闭清理：销毁 `pr-N` Stack/ECR tag 与 Cloudflare Preview ~40min
 - [ ] 3.T-306: Phase 3 验收（AC-3）：开一个 PR 触发构建+部署，拿到预览 URL；关闭 PR 验证清理 ~30min
 
 ## 依赖关系

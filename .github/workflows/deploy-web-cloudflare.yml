@@ -31,6 +31,8 @@ on:
       - "pnpm-workspace.yaml"
       - "turbo.json"
       - ".github/workflows/deploy-web-cloudflare.yml"
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
   workflow_dispatch: {}
 
 concurrency:
@@ -42,6 +44,7 @@ permissions:
 
 jobs:
   deploy:
+    if: github.event_name != 'pull_request' || (github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository)
     name: Build & deploy to Pages
     runs-on: ubuntu-latest
     env:
@@ -70,6 +73,8 @@ jobs:
         # VITE_SERVER_URL 缺失时构建会失败(env 校验)；用仓库变量，未配则回退到已部署的 Lambda API。
         env:
           VITE_SERVER_URL: ${{ vars.VITE_SERVER_URL || 'https://kn0oq7adrl.execute-api.ap-northeast-1.amazonaws.com' }}
+          VITE_PROFILE_GO_URL: ${{ vars.VITE_PROFILE_GO_URL }}
+          VITE_PR_NUMBER: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || '' }}
         run: pnpm exec turbo run build --filter=web
 
       - name: Verify build output
@@ -85,6 +90,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DEPLOY_BRANCH: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'master' }}
         run: |
           set -euo pipefail
           # 幂等创建 Pages 项目：已存在则忽略失败。
@@ -92,4 +98,29 @@ jobs:
             --production-branch=master || true
           # 部署构建产物到 Pages。
           pnpm dlx wrangler@latest pages deploy apps/web/dist \
-            --project-name=yy-workflow-aigc --branch=master
+            --project-name=yy-workflow-aigc --branch="$DEPLOY_BRANCH"
+
+  cleanup-preview:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    name: Delete Pages preview
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete deployments for PR branch
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PREVIEW_BRANCH: pr-${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          RESPONSE="$(curl -fsS \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/yy-workflow-aigc/deployments")"
+          echo "$RESPONSE" \
+            | jq -r --arg branch "$PREVIEW_BRANCH" \
+              '.result[] | select(.deployment_trigger.metadata.branch == $branch) | .id' \
+            | while read -r deployment_id; do
+                test -n "$deployment_id" || continue
+                curl -fsS -X DELETE \
+                  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+                  "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/yy-workflow-aigc/deployments/${deployment_id}"
+              done

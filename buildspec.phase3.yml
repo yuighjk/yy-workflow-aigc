@@ -1,0 +1,89 @@
+version: 0.2
+
+env:
+  shell: bash
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 20
+    commands:
+      - corepack enable
+      - corepack prepare pnpm@10.33.2 --activate
+      - pnpm install --frozen-lockfile
+
+  pre_build:
+    commands:
+      - test -n "$PR_NUMBER" && [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]
+      - test -n "$PR_ACTION"
+      - export STACK_NAME="yy-workflow-pr-${PR_NUMBER}"
+      - export IMAGE_TAG="${IMAGE_TAG:-pr-${PR_NUMBER}-${COMMIT_SHA:0:12}}"
+      - export ECR_REGISTRY="${ECR_REPOSITORY_URI%%/*}"
+      - |
+        if [ "$PR_ACTION" != "closed" ]; then
+          aws ecr get-login-password --region "$AWS_REGION" \
+            | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+        fi
+
+  build:
+    commands:
+      - |
+        set -euo pipefail
+        if [ "$PR_ACTION" = "closed" ]; then
+          pnpm --dir infra exec cdk destroy "$STACK_NAME" \
+            --exclusively \
+            --force \
+            -c "prNumber=$PR_NUMBER" \
+            -c "imageTag=cleanup"
+          IMAGE_IDS="$(aws ecr list-images \
+            --repository-name yy-workflow/profile-go \
+            --filter tagStatus=TAGGED \
+            --query "imageIds[?starts_with(imageTag, 'pr-${PR_NUMBER}-')]" \
+            --output json)"
+          if [ "$IMAGE_IDS" != "[]" ]; then
+            aws ecr batch-delete-image \
+              --repository-name yy-workflow/profile-go \
+              --image-ids "$IMAGE_IDS" >/dev/null
+          fi
+          exit 0
+        fi
+
+        docker build \
+          --platform linux/amd64 \
+          --file services/profile-go/Dockerfile \
+          --tag "$ECR_REPOSITORY_URI:$IMAGE_TAG" \
+          .
+        docker push "$ECR_REPOSITORY_URI:$IMAGE_TAG"
+
+        if [ "${HAS_DB_CHANGES:-false}" = "true" ]; then
+          SECRET_JSON="$(aws secretsmanager get-secret-value \
+            --secret-id "$DATABASE_SECRET_ARN" \
+            --query SecretString \
+            --output text)"
+          export DATABASE_URL="$(SECRET_JSON="$SECRET_JSON" node -e \
+            'const value = JSON.parse(process.env.SECRET_JSON); process.stdout.write(value.DATABASE_URL)')"
+          export SKIP_ENV_VALIDATION=1
+          pnpm --filter @yy-workflow-aigc/db exec prisma validate \
+            --schema prisma/schema
+          pnpm --filter @yy-workflow-aigc/db exec prisma migrate diff \
+            --from-config-datasource \
+            --to-schema prisma/schema \
+            --script \
+            --output /tmp/pr-migration-dry-run.sql
+          echo "DB migration dry-run completed; no SQL was applied."
+          unset DATABASE_URL SECRET_JSON
+        fi
+
+        pnpm --dir infra exec cdk deploy "$STACK_NAME" \
+          --exclusively \
+          --require-approval never \
+          -c "prNumber=$PR_NUMBER" \
+          -c "imageTag=$IMAGE_TAG"
+
+  post_build:
+    commands:
+      - echo "Phase 3 action=$PR_ACTION pr=$PR_NUMBER stack=$STACK_NAME completed"
+
+cache:
+  paths:
+    - /root/.local/share/pnpm/store/**/*

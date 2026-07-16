@@ -1,0 +1,154 @@
+name: Phase 3 PR Backend
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number
+        required: true
+        type: number
+      action:
+        description: Deploy or destroy the PR environment
+        options: [deploy, closed]
+        required: true
+        type: choice
+
+concurrency:
+  group: phase3-backend-${{ github.event.pull_request.number || inputs.pr_number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  backend:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    name: Build and reconcile PR backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'ap-northeast-1' }}
+      PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+    steps:
+      - name: Validate Phase 3 variables
+        env:
+          AWS_ROLE_ARN: ${{ vars.AWS_GITHUB_OIDC_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$AWS_ROLE_ARN" ]; then
+            echo "::error::Missing GitHub Repository Variable: AWS_GITHUB_OIDC_ROLE_ARN"
+            exit 1
+          fi
+
+      - name: Checkout PR source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_GITHUB_OIDC_ROLE_ARN }}
+          role-session-name: phase3-pr-${{ env.PR_NUMBER }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          cache: pnpm
+          node-version: 22
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve PR deployment values
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          echo "ECR_REPOSITORY_URI=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/yy-workflow/profile-go" >> "$GITHUB_ENV"
+          echo "IMAGE_TAG=pr-${PR_NUMBER}-${HEAD_SHA:0:12}" >> "$GITHUB_ENV"
+          echo "STACK_NAME=yy-workflow-pr-${PR_NUMBER}" >> "$GITHUB_ENV"
+
+      - name: Detect database changes
+        if: (github.event.action || inputs.action) != 'closed'
+        id: db_changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- packages/db/prisma; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate database schema changes
+        if: steps.db_changes.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          export SKIP_ENV_VALIDATION=1
+          pnpm --filter @yy-workflow-aigc/db exec prisma validate --schema prisma/schema
+          pnpm --filter @yy-workflow-aigc/db exec prisma migrate diff \
+            --from-empty \
+            --to-schema prisma/schema \
+            --script \
+            --output /tmp/pr-migration-dry-run.sql
+          echo "Database schema diff completed without connecting to Aurora."
+
+      - name: Login to Amazon ECR
+        if: (github.event.action || inputs.action) != 'closed'
+        run: |
+          set -euo pipefail
+          ECR_REGISTRY="${ECR_REPOSITORY_URI%%/*}"
+          aws ecr get-login-password --region "$AWS_REGION" \
+            | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+
+      - name: Build and push PR image
+        if: (github.event.action || inputs.action) != 'closed'
+        run: |
+          set -euo pipefail
+          docker build \
+            --platform linux/amd64 \
+            --file services/profile-go/Dockerfile \
+            --tag "$ECR_REPOSITORY_URI:$IMAGE_TAG" \
+            .
+          docker push "$ECR_REPOSITORY_URI:$IMAGE_TAG"
+
+      - name: Deploy PR stack with CDK
+        if: (github.event.action || inputs.action) != 'closed'
+        run: |
+          pnpm --dir infra exec cdk deploy "$STACK_NAME" \
+            --exclusively \
+            --require-approval never \
+            -c "prNumber=$PR_NUMBER" \
+            -c "imageTag=$IMAGE_TAG"
+
+      - name: Destroy PR stack and images
+        if: (github.event.action || inputs.action) == 'closed'
+        run: |
+          set -euo pipefail
+          pnpm --dir infra exec cdk destroy "$STACK_NAME" \
+            --exclusively \
+            --force \
+            -c "prNumber=$PR_NUMBER" \
+            -c "imageTag=cleanup"
+          IMAGE_IDS="$(aws ecr list-images \
+            --repository-name yy-workflow/profile-go \
+            --filter tagStatus=TAGGED \
+            --query "imageIds[?starts_with(imageTag, 'pr-${PR_NUMBER}-')]" \
+            --output json)"
+          if [ "$IMAGE_IDS" != "[]" ]; then
+            aws ecr batch-delete-image \
+              --repository-name yy-workflow/profile-go \
+              --image-ids "$IMAGE_IDS" >/dev/null
+          fi

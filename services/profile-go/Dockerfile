@@ -1,4 +1,4 @@
-FROM golang:1.25-alpine AS build
+FROM mirror.gcr.io/library/golang:1.25-alpine AS build
 
 WORKDIR /src
 COPY services/profile-go/go.mod services/profile-go/go.sum ./

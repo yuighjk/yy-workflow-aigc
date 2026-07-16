@@ -12,6 +12,8 @@ export const Route = createFileRoute("/_auth/profile-bio")({
 const PROFILE_GO_URL =
 	(import.meta as { env?: Record<string, string> }).env?.VITE_PROFILE_GO_URL ??
 	"http://localhost:8080";
+const PR_NUMBER = (import.meta as { env?: Record<string, string> }).env
+	?.VITE_PR_NUMBER;
 
 interface BioResponse {
 	bio: string;
@@ -31,7 +33,10 @@ function ProfileBioPage() {
 		setLoading(true);
 		try {
 			const res = await fetch(
-				`${PROFILE_GO_URL}/profile/bio?login=${encodeURIComponent(login)}`
+				`${PROFILE_GO_URL}/profile/bio?login=${encodeURIComponent(login)}`,
+				{
+					headers: PR_NUMBER ? { "x-yy-pr-number": PR_NUMBER } : undefined,
+				}
 			);
 			const data = (await res.json()) as BioResponse & { error?: string };
 			if (!res.ok) {
