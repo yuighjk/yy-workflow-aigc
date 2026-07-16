@@ -8,11 +8,9 @@ Phase 3 复用 Phase 2 的 VPC、私有子网、NAT、ECR、ECS Cluster、Intern
 GitHub PR
 ├─ Cloudflare Pages Preview（branch: pr-N）
 └─ GitHub Actions OIDC
-   └─ 上传源码 ZIP 到私有 S3
-      └─ 启动 VPC 内 CodeBuild
-         ├─ 构建并推送 ECR:pr-N-SHA
-         ├─ 数据库变更仅运行 Prisma migrate diff（不执行 SQL）
-         └─ cdk deploy yy-workflow-pr-N
+   ├─ GitHub Runner 构建并推送 ECR:pr-N-SHA
+   ├─ 数据库变更仅运行离线 Prisma schema diff（不连接 Aurora、不执行 SQL）
+   └─ cdk deploy yy-workflow-pr-N
 
 浏览器
 └─ 共享 ProfileApiUrl + Header: x-yy-pr-number=N
@@ -21,12 +19,12 @@ GitHub PR
          └─ ECS Service profile-go-pr-N
 ```
 
-PR 关闭时，GitHub Actions 启动 CodeBuild 执行 `cdk destroy yy-workflow-pr-N`，并删除对应 ECR tag；Cloudflare 工作流删除 `pr-N` Preview deployments。
+PR 关闭时，GitHub Actions 执行 `cdk destroy yy-workflow-pr-N`，并删除对应 ECR tag；Cloudflare 工作流删除 `pr-N` Preview deployments。CodeBuild 资源暂时保留为账号解除限制后的备用路径，当前工作流不调用 CodeBuild。
 
 ## 三个显式 IAM 角色
 
-1. `yy-workflow-github-oidc`：仅允许 `yuighjk/yy-workflow-aigc` 通过 GitHub OIDC 上传源码并启动/查询指定 CodeBuild Project。
-2. `yy-workflow-phase3-codebuild`：读取源码、推送 ECR、读取 DB Secret、创建 VPC ENI，并仅 Assume CDK bootstrap roles 完成 PR Stack 生命周期。其安全组仅在检测到数据库变更、执行 Prisma diff 时访问 Aurora 5432。
+1. `yy-workflow-github-oidc`：仅允许 `yuighjk/yy-workflow-aigc` 通过 GitHub OIDC 推送 PR 镜像，并 Assume CDK bootstrap roles 管理 PR Stack。
+2. `yy-workflow-phase3-codebuild`：备用执行角色；新账号 CodeBuild queue 限制解除后可恢复原路径。
 3. `yy-workflow-phase3-pr-ecs`：PR Fargate Task 的共享 execution/runtime role，读取镜像、日志和 DB Secret。
 
 ## 一次性部署
@@ -78,8 +76,6 @@ CODEBUILD_PROJECT="$(aws cloudformation describe-stacks \
 ```bash
 gh variable set AWS_REGION --body "ap-northeast-1"
 gh variable set AWS_GITHUB_OIDC_ROLE_ARN --body "$GITHUB_ROLE_ARN"
-gh variable set PHASE3_SOURCE_BUCKET --body "$SOURCE_BUCKET"
-gh variable set PHASE3_CODEBUILD_PROJECT --body "$CODEBUILD_PROJECT"
 gh variable set VITE_PROFILE_GO_URL \
   --body "https://96r1jv57ee.execute-api.ap-northeast-1.amazonaws.com"
 ```
@@ -113,7 +109,7 @@ curl -i \
 ## 安全与限制
 
 - Fork PR 不执行带 AWS/Cloudflare 权限的工作流。
-- PR 数据库变更只执行 `prisma migrate diff`，不会执行生成的 SQL。
+- PR 数据库变更只执行离线 `prisma migrate diff --from-empty`，不会连接 Aurora，也不会执行生成的 SQL。
 - PR 共用 dev Aurora，因此功能测试可能读取同一批数据。
 - ALB Rule priority 使用 `1000 + PR_NUMBER`，当前支持 PR 编号不超过 48000。
-- S3 源码包在构建结束后删除，生命周期规则会兜底清理 7 天前对象。
+- GitHub Actions 当前直接构建并部署，不受 CodeBuild 新账号 queue=0 限制。

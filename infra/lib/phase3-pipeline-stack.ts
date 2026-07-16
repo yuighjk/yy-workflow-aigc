@@ -75,11 +75,46 @@ export class Phase3PipelineStack extends Stack {
 				"sts:AssumeRoleWithWebIdentity"
 			),
 			description:
-				"Allows this repository's GitHub Actions to upload PR source and start CodeBuild",
+				"Allows this repository's GitHub Actions to build images and deploy PR stacks",
 			maxSessionDuration: Duration.hours(1),
 			roleName: "yy-workflow-github-oidc",
 		});
 		this.sourceBucket.grantReadWrite(githubRole, "sources/*");
+		props.shared.repository.grantPullPush(githubRole);
+		githubRole.addToPolicy(
+			new iam.PolicyStatement({
+				actions: ["ecr:BatchDeleteImage", "ecr:ListImages"],
+				resources: [props.shared.repository.repositoryArn],
+			})
+		);
+		githubRole.addToPolicy(
+			new iam.PolicyStatement({
+				actions: ["sts:AssumeRole"],
+				resources: [
+					Stack.of(this).formatArn({
+						account: Stack.of(this).account,
+						region: "",
+						resource: "role",
+						resourceName: `cdk-hnb659fds-deploy-role-${Stack.of(this).account}-${Stack.of(this).region}`,
+						service: "iam",
+					}),
+					Stack.of(this).formatArn({
+						account: Stack.of(this).account,
+						region: "",
+						resource: "role",
+						resourceName: `cdk-hnb659fds-file-publishing-role-${Stack.of(this).account}-${Stack.of(this).region}`,
+						service: "iam",
+					}),
+					Stack.of(this).formatArn({
+						account: Stack.of(this).account,
+						region: "",
+						resource: "role",
+						resourceName: `cdk-hnb659fds-lookup-role-${Stack.of(this).account}-${Stack.of(this).region}`,
+						service: "iam",
+					}),
+				],
+			})
+		);
 
 		const codeBuildRole = new iam.Role(this, "CodeBuildServiceRole", {
 			assumedBy: new iam.ServicePrincipal("codebuild.amazonaws.com"),
