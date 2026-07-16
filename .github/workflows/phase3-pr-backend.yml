@@ -40,9 +40,14 @@ jobs:
           AWS_ROLE_ARN: ${{ vars.AWS_GITHUB_OIDC_ROLE_ARN }}
         run: |
           set -euo pipefail
-          test -n "$AWS_ROLE_ARN"
-          test -n "$CODEBUILD_PROJECT"
-          test -n "$SOURCE_BUCKET"
+          missing=()
+          test -n "$AWS_ROLE_ARN" || missing+=(AWS_GITHUB_OIDC_ROLE_ARN)
+          test -n "$CODEBUILD_PROJECT" || missing+=(PHASE3_CODEBUILD_PROJECT)
+          test -n "$SOURCE_BUCKET" || missing+=(PHASE3_SOURCE_BUCKET)
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf '::error::Missing GitHub Repository Variable: %s\n' "${missing[@]}"
+            exit 1
+          fi
 
       - name: Checkout PR source
         uses: actions/checkout@v4
