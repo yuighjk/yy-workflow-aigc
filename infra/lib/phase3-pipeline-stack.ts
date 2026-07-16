@@ -265,5 +265,17 @@ export class Phase3PipelineStack extends Stack {
 		new CfnOutput(this, "CodeBuildProjectName", {
 			value: this.codeBuildProject.projectName,
 		});
+		new CfnOutput(this, "PrEcsRoleArn", {
+			exportName: "yy-workflow-phase3:PrEcsRoleArn",
+			value: this.prEcsRole.roleArn,
+		});
+		new CfnOutput(this, "DatabaseSecretArnOutput", {
+			exportName: "yy-workflow-phase3:DatabaseSecretArn",
+			value: databaseSecretArn.valueAsString,
+		});
+		new CfnOutput(this, "PrLogGroupName", {
+			exportName: "yy-workflow-phase3:PrLogGroupName",
+			value: this.prLogGroup.logGroupName,
+		});
 	}
 }

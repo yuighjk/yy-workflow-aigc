@@ -1,17 +1,25 @@
 // biome-ignore-all lint/performance/noNamespaceImport: CDK service modules are intentionally grouped by AWS namespace.
 
-import { CfnOutput, Duration, Stack, type StackProps, Tags } from "aws-cdk-lib";
+import {
+	CfnOutput,
+	Duration,
+	Fn,
+	Stack,
+	type StackProps,
+	Tags,
+} from "aws-cdk-lib";
 import * as ecs from "aws-cdk-lib/aws-ecs";
 import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
+import * as iam from "aws-cdk-lib/aws-iam";
+import * as logs from "aws-cdk-lib/aws-logs";
+import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as servicediscovery from "aws-cdk-lib/aws-servicediscovery";
 import type { Construct } from "constructs";
 
 import type { Phase2SharedStack } from "./phase2-shared-stack.js";
-import type { Phase3PipelineStack } from "./phase3-pipeline-stack.js";
 
 interface Phase3PrStackProps extends StackProps {
 	readonly imageTag: string;
-	readonly pipeline: Phase3PipelineStack;
 	readonly prNumber: number;
 	readonly shared: Phase2SharedStack;
 }
@@ -32,19 +40,36 @@ export class Phase3PrStack extends Stack {
 		Tags.of(this).add("pr-number", String(props.prNumber));
 		Tags.of(this).add("managed-by", "aws-cdk");
 
+		const prEcsRole = iam.Role.fromRoleArn(
+			this,
+			"PrEcsRole",
+			Fn.importValue("yy-workflow-phase3:PrEcsRoleArn"),
+			{ mutable: false }
+		);
+		const databaseSecret = secretsmanager.Secret.fromSecretCompleteArn(
+			this,
+			"DatabaseSecret",
+			Fn.importValue("yy-workflow-phase3:DatabaseSecretArn")
+		);
+		const prLogGroup = logs.LogGroup.fromLogGroupName(
+			this,
+			"PrLogGroup",
+			Fn.importValue("yy-workflow-phase3:PrLogGroupName")
+		);
+
 		const taskDefinition = new ecs.FargateTaskDefinition(
 			this,
 			"TaskDefinition",
 			{
 				cpu: 256,
-				executionRole: props.pipeline.prEcsRole,
+				executionRole: prEcsRole,
 				family: `yy-workflow-profile-${suffix}`,
 				memoryLimitMiB: 512,
 				runtimePlatform: {
 					cpuArchitecture: ecs.CpuArchitecture.X86_64,
 					operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
 				},
-				taskRole: props.pipeline.prEcsRole,
+				taskRole: prEcsRole,
 			}
 		);
 		const container = taskDefinition.addContainer("ProfileGo", {
@@ -58,12 +83,12 @@ export class Phase3PrStack extends Stack {
 				props.imageTag
 			),
 			logging: ecs.LogDrivers.awsLogs({
-				logGroup: props.pipeline.prLogGroup,
+				logGroup: prLogGroup,
 				streamPrefix: suffix,
 			}),
 			secrets: {
 				DATABASE_URL: ecs.Secret.fromSecretsManager(
-					props.pipeline.databaseSecret,
+					databaseSecret,
 					"DATABASE_URL"
 				),
 			},

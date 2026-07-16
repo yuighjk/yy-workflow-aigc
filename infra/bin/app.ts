@@ -25,7 +25,7 @@ new Phase2ServiceStack(app, "yy-workflow-phase2-service", {
 	shared,
 });
 
-const pipeline = new Phase3PipelineStack(app, "yy-workflow-phase3-pipeline", {
+new Phase3PipelineStack(app, "yy-workflow-phase3-pipeline", {
 	env: environment,
 	description:
 		"Phase 3 GitHub OIDC, CodeBuild, and shared IAM for pull request environments",
@@ -44,7 +44,6 @@ if (prNumberValue !== undefined) {
 	new Phase3PrStack(app, `yy-workflow-pr-${prNumber}`, {
 		env: environment,
 		imageTag,
-		pipeline,
 		prNumber,
 		shared,
 	});
