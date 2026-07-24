@@ -1,26 +1,32 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
+	"time"
 )
+
+const databaseHealthTimeout = 3 * time.Second
 
 // Handler 持有依赖（数据库 Store），提供各 HTTP handler。
 type Handler struct {
-	store *Store
+	checkDatabase func(context.Context) error
+	store         *Store
 }
 
 // NewHandler 构造 Handler。
 func NewHandler(store *Store) *Handler {
-	return &Handler{store: store}
+	return &Handler{checkDatabase: store.Health, store: store}
 }
 
 // Routes 注册所有路由并返回 mux。
 func (h *Handler) Routes() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", h.health)
+	mux.HandleFunc("GET /health", h.readiness)
 	mux.HandleFunc("GET /profile/list", h.list)
 	mux.HandleFunc("POST /profile/fetch", h.fetch)
 	mux.HandleFunc("GET /profile/bio", h.bio)
@@ -43,6 +49,26 @@ func writeErr(w http.ResponseWriter, status int, msg string) {
 func (h *Handler) health(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("ok"))
+}
+
+// readiness 执行 SELECT 1，供 AWS Synthetics 巡检应用到数据库的完整链路。
+func (h *Handler) readiness(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), databaseHealthTimeout)
+	defer cancel()
+
+	if err := h.checkDatabase(ctx); err != nil {
+		log.Printf("数据库巡检失败: %v", err)
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+			"database": "unavailable",
+			"status":   "error",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"database": "ok",
+		"status":   "ok",
+	})
 }
 
 // list 列出已保存档案（最新在前）。

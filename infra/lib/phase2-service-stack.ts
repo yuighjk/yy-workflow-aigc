@@ -12,6 +12,7 @@ import {
 } from "aws-cdk-lib";
 import * as apigwv2 from "aws-cdk-lib/aws-apigatewayv2";
 import * as integrations from "aws-cdk-lib/aws-apigatewayv2-integrations";
+import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
 import * as ecs from "aws-cdk-lib/aws-ecs";
 import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
 import * as iam from "aws-cdk-lib/aws-iam";
@@ -19,6 +20,7 @@ import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as servicediscovery from "aws-cdk-lib/aws-servicediscovery";
+import * as synthetics from "aws-cdk-lib/aws-synthetics";
 import type { Construct } from "constructs";
 
 import type { Phase2SharedStack } from "./phase2-shared-stack.js";
@@ -28,6 +30,41 @@ interface Phase2ServiceStackProps extends StackProps {
 }
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
+const canaryRuntime = new synthetics.Runtime(
+	"syn-nodejs-5.1",
+	synthetics.RuntimeFamily.NODEJS
+);
+const healthCanaryCode = `
+const synthetics = require("@aws/synthetics-core");
+
+exports.handler = async () => {
+  const healthUrl = process.env.HEALTH_URL;
+  if (!healthUrl) {
+    throw new Error("HEALTH_URL is not configured");
+  }
+
+  await synthetics.executeHttpStep(
+    "GET /health (SELECT 1)",
+    healthUrl,
+    async (response) => {
+      let body = "";
+      for await (const chunk of response) {
+        body += chunk;
+      }
+
+      if (response.statusCode !== 200) {
+        throw new Error(\`Health endpoint returned \${response.statusCode}: \${body}\`);
+      }
+
+      const result = JSON.parse(body);
+      if (result.status !== "ok" || result.database !== "ok") {
+        throw new Error(\`Health endpoint returned an unhealthy result: \${body}\`);
+      }
+    },
+    { includeResponseBody: true }
+  );
+};
+`;
 
 export class Phase2ServiceStack extends Stack {
 	constructor(scope: Construct, id: string, props: Phase2ServiceStackProps) {
@@ -155,6 +192,7 @@ export class Phase2ServiceStack extends Stack {
 			action: elbv2.ListenerAction.forward([targetGroup]),
 			conditions: [
 				elbv2.ListenerCondition.pathPatterns([
+					"/health",
 					"/healthz",
 					"/profile",
 					"/profile/*",
@@ -210,9 +248,47 @@ export class Phase2ServiceStack extends Stack {
 			methods: [apigwv2.HttpMethod.GET],
 			path: "/healthz",
 		});
+		httpApi.addRoutes({
+			integration: bffIntegration,
+			methods: [apigwv2.HttpMethod.GET],
+			path: "/health",
+		});
+
+		const healthCanary = new synthetics.Canary(this, "HealthCanary", {
+			canaryName: "yy-workflow-health",
+			environmentVariables: {
+				HEALTH_URL: `${httpApi.apiEndpoint}/health`,
+			},
+			failureRetentionPeriod: Duration.days(31),
+			provisionedResourceCleanup: true,
+			runtime: canaryRuntime,
+			schedule: synthetics.Schedule.rate(Duration.minutes(5)),
+			successRetentionPeriod: Duration.days(7),
+			test: synthetics.Test.custom({
+				code: synthetics.Code.fromInline(healthCanaryCode),
+				handler: "index.handler",
+			}),
+			timeout: Duration.seconds(30),
+		});
+		const healthAlarm = new cloudwatch.Alarm(this, "HealthCanaryAlarm", {
+			alarmDescription:
+				"The public API to profile-go to Aurora health inspection failed",
+			comparisonOperator:
+				cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+			evaluationPeriods: 1,
+			metric: healthCanary.metricFailed({ period: Duration.minutes(5) }),
+			threshold: 1,
+			treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+		});
 
 		new CfnOutput(this, "ProfileApiUrl", {
 			value: httpApi.apiEndpoint,
+		});
+		new CfnOutput(this, "HealthCanaryName", {
+			value: healthCanary.canaryName,
+		});
+		new CfnOutput(this, "HealthAlarmName", {
+			value: healthAlarm.alarmName,
 		});
 		new CfnOutput(this, "CloudMapServiceName", {
 			value: `profile-go.${props.shared.namespace.namespaceName}`,

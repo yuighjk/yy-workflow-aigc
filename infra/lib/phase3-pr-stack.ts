@@ -139,6 +139,7 @@ export class Phase3PrStack extends Stack {
 					String(props.prNumber),
 				]),
 				elbv2.ListenerCondition.pathPatterns([
+					"/health",
 					"/healthz",
 					"/profile",
 					"/profile/*",

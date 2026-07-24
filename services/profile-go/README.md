@@ -16,6 +16,7 @@ export PORT=8080
 go run .
 # 另开终端
 curl localhost:8080/healthz   # -> ok
+curl localhost:8080/health    # -> {"database":"ok","status":"ok"}
 ```
 
 ## Docker
