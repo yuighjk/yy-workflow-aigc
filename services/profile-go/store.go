@@ -66,6 +66,18 @@ func (s *Store) Close() {
 	s.pool.Close()
 }
 
+// Health 执行最小 SQL 查询，验证应用到数据库的完整链路。
+func (s *Store) Health(ctx context.Context) error {
+	var result int
+	if err := s.pool.QueryRow(ctx, "SELECT 1").Scan(&result); err != nil {
+		return fmt.Errorf("数据库巡检失败: %w", err)
+	}
+	if result != 1 {
+		return fmt.Errorf("数据库巡检返回异常结果: %d", result)
+	}
+	return nil
+}
+
 // scanColumns 是各查询共用的列顺序。
 // 注意：现有表由 Prisma 生成，列名是 camelCase 原样（@@map 只映射表名，未映射列名），
 // 在 Postgres 中必须用双引号引用，否则会被折叠成小写而找不到列。
